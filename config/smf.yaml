@@ -1,0 +1,32 @@
+smf:
+  sbi:
+    server:
+      - address: 172.20.0.5
+        port: 7777
+    client:
+      nrf:
+        - uri: http://172.20.0.3:7777
+
+  pfcp:
+    server:
+      - address: 172.20.0.5
+    client:
+      upf:
+        - address: 172.20.0.7
+        - address: 172.20.0.8
+
+  gtpu:
+    server:
+      - address: 172.20.0.5
+
+  dns:
+    - 8.8.8.8
+    - 8.8.4.4
+
+  mtu: 1400
+
+  session:
+    - name: internet
+      subnet: 10.45.0.0/16
+    - name: internet
+      subnet: 10.46.0.0/16

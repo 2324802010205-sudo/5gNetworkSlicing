@@ -1,0 +1,11 @@
+logger:
+  level: info
+
+pcf:
+  sbi:
+    server:
+      - address: 172.20.0.12
+        port: 7777
+    client:
+      nrf:
+        - uri: http://172.20.0.3:7777

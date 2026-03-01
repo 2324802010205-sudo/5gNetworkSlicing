@@ -1,0 +1,146 @@
+networks:
+  br-5gcore:
+    external: true
+
+services:
+
+  mongo:
+    image: mongo:6-jammy
+    container_name: mongo
+    restart: always
+    command: ["mongod", "--bind_ip_all"]
+    networks:
+      br-5gcore:
+        ipv4_address: 172.20.0.2
+    volumes:
+      - ./mongodb_data:/data/db
+
+  nrf:
+    image: gradiant/open5gs:2.7.5
+    container_name: nrf
+    command: open5gs-nrfd -c /opt/open5gs/etc/open5gs/nrf.yaml
+    depends_on:
+      - mongo
+    networks:
+      br-5gcore:
+        ipv4_address: 172.20.0.3
+    volumes:
+      - ./config/nrf.yaml:/opt/open5gs/etc/open5gs/nrf.yaml:ro
+
+  amf:
+    image: gradiant/open5gs:2.7.5
+    container_name: amf
+    command: open5gs-amfd -c /opt/open5gs/etc/open5gs/amf.yaml
+    depends_on:
+      - nrf
+    networks:
+      br-5gcore:
+        ipv4_address: 172.20.0.4
+    volumes:
+      - ./config/amf.yaml:/opt/open5gs/etc/open5gs/amf.yaml:ro
+
+  smf:
+    image: gradiant/open5gs:2.7.5
+    container_name: smf
+    command: open5gs-smfd -c /opt/open5gs/etc/open5gs/smf.yaml
+    depends_on:
+      - nrf
+    networks:
+      br-5gcore:
+        ipv4_address: 172.20.0.5
+    volumes:
+      - ./config/smf.yaml:/opt/open5gs/etc/open5gs/smf.yaml:ro
+
+  ausf:
+    image: gradiant/open5gs:2.7.5
+    container_name: ausf
+    command: open5gs-ausfd -c /opt/open5gs/etc/open5gs/ausf.yaml
+    depends_on:
+      - nrf
+    networks:
+      br-5gcore:
+        ipv4_address: 172.20.0.6
+    volumes:
+      - ./config/ausf.yaml:/opt/open5gs/etc/open5gs/ausf.yaml:ro
+
+  udm:
+    image: gradiant/open5gs:2.7.5
+    container_name: udm
+    command: open5gs-udmd -c /opt/open5gs/etc/open5gs/udm.yaml
+    depends_on:
+      - nrf
+    networks:
+      br-5gcore:
+        ipv4_address: 172.20.0.9
+    volumes:
+      - ./config/udm.yaml:/opt/open5gs/etc/open5gs/udm.yaml:ro
+
+  udr:
+    image: gradiant/open5gs:2.7.5
+    container_name: udr
+    command: open5gs-udrd -c /opt/open5gs/etc/open5gs/udr.yaml
+    depends_on:
+      - mongo
+      - nrf
+    networks:
+      br-5gcore:
+        ipv4_address: 172.20.0.11
+    volumes:
+      - ./config/udr.yaml:/opt/open5gs/etc/open5gs/udr.yaml:ro
+  pcf:
+    image: gradiant/open5gs:2.7.5
+    container_name: pcf
+    command: open5gs-pcfd -c /opt/open5gs/etc/open5gs/pcf.yaml
+    depends_on:
+      - nrf
+    networks:
+      br-5gcore:
+        ipv4_address: 172.20.0.12
+    volumes:
+      - ./config/pcf.yaml:/opt/open5gs/etc/open5gs/pcf.yaml:ro
+
+  upf-embb:
+    image: gradiant/open5gs:2.7.5
+    container_name: upf-embb
+    user: root
+    command: open5gs-upfd -c /opt/open5gs/etc/open5gs/upf-embb.yaml
+    privileged: true
+    cap_add:
+      - NET_ADMIN
+    devices:
+      - /dev/net/tun:/dev/net/tun
+    networks:
+      br-5gcore:
+        ipv4_address: 172.20.0.7
+    volumes:
+      - ./config/upf-embb.yaml:/opt/open5gs/etc/open5gs/upf-embb.yaml:ro
+
+  upf-urllc:
+    image: gradiant/open5gs:2.7.5
+    container_name: upf-urllc
+    user: root
+    command: open5gs-upfd -c /opt/open5gs/etc/open5gs/upf-urllc.yaml
+    privileged: true
+    cap_add:
+      - NET_ADMIN
+    devices:
+      - /dev/net/tun:/dev/net/tun
+    networks:
+      br-5gcore:
+        ipv4_address: 172.20.0.8
+    volumes:
+      - ./config/upf-urllc.yaml:/opt/open5gs/etc/open5gs/upf-urllc.yaml:ro
+
+  webui:
+    image: gradiant/open5gs-webui:2.7.5
+    container_name: webui
+    depends_on:
+      - mongo
+    environment:
+      - DB_URI=mongodb://mongo:27017/open5gs
+    networks:
+      br-5gcore:
+        ipv4_address: 172.20.0.10
+    ports:
+      - "9999:9999"
+

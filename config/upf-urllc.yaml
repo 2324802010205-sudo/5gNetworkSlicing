@@ -1,0 +1,9 @@
+upf:
+  pfcp:
+    server:
+      - address: 172.20.0.8
+  gtpu:
+    server:
+      - address: 172.20.0.8
+  session:
+    - subnet: 10.46.0.0/16

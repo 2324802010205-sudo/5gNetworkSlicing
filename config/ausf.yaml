@@ -1,0 +1,8 @@
+ausf:
+  sbi:
+    server:
+      - address: 172.20.0.6
+        port: 7777
+    client:
+      nrf:
+        - uri: http://172.20.0.3:7777

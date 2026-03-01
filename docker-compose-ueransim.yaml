@@ -1,0 +1,33 @@
+networks:
+  br-5gcore:
+    external: true
+
+services:
+  gnb:
+    image: gradiant/ueransim:3.2.6
+    container_name: gnb
+    entrypoint: ["nr-gnb", "-c", "/mnt/ueransim/gnb.yaml"]
+    networks:
+      br-5gcore:
+        ipv4_address: 172.20.0.20
+    volumes:
+      - ./config-ueransim:/mnt/ueransim
+    cap_add:
+      - NET_ADMIN
+
+  ue:
+    image: gradiant/ueransim:3.2.6
+    container_name: ue
+    entrypoint: ["nr-ue", "-c", "/mnt/ueransim/ue.yaml"]
+    privileged: true
+    cap_add:
+      - NET_ADMIN
+    devices:
+      - "/dev/net/tun:/dev/net/tun"
+    networks:
+      br-5gcore:
+        ipv4_address: 172.20.0.21
+    volumes:
+      - ./config-ueransim:/mnt/ueransim
+    depends_on:
+      - gnb
