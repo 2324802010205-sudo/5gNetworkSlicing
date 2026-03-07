@@ -3,7 +3,6 @@ networks:
     external: true
 
 services:
-
   mongo:
     image: mongo:6-jammy
     container_name: mongo
@@ -114,6 +113,11 @@ services:
         ipv4_address: 172.20.0.7
     volumes:
       - ./config/upf-embb.yaml:/opt/open5gs/etc/open5gs/upf-embb.yaml:ro
+    deploy:
+      resources:
+        limits:
+          cpus: '2.0'
+          memory: 2G
 
   upf-urllc:
     image: gradiant/open5gs:2.7.5
@@ -130,6 +134,12 @@ services:
         ipv4_address: 172.20.0.8
     volumes:
       - ./config/upf-urllc.yaml:/opt/open5gs/etc/open5gs/upf-urllc.yaml:ro
+    # upf-urllc
+    deploy:
+      resources:
+        limits:
+          cpus: '1.0'
+          memory: 1G
 
   webui:
     image: gradiant/open5gs-webui:2.7.5
@@ -144,3 +154,55 @@ services:
     ports:
       - "9999:9999"
 
+  node-exporter:
+    image: prom/node-exporter:latest
+    container_name: node-exporter
+    networks:
+      br-5gcore:
+        ipv4_address: 172.20.0.31
+    command:
+      - '--path.rootfs=/host'
+    volumes:
+      - /:/host:ro,rslave
+
+  cadvisor:
+    image: gcr.io/cadvisor/cadvisor:latest
+    container_name: cadvisor
+    privileged: true
+    networks:
+      br-5gcore:
+        ipv4_address: 172.20.0.32
+    volumes:
+      - /:/rootfs:ro
+      - /var/run:/var/run:ro
+      - /sys:/sys:ro
+      - /var/lib/docker/:/var/lib/docker:ro
+      - /dev/disk/:/dev/disk:ro
+
+  prometheus:
+    image: prom/prometheus:latest
+    container_name: prometheus
+    networks:
+      br-5gcore:
+        ipv4_address: 172.20.0.33
+    volumes:
+      - ./config/prometheus.yml:/etc/prometheus/prometheus.yml
+    ports:
+      - "9090:9090"
+    depends_on:
+      - cadvisor
+      - node-exporter
+
+  grafana:
+    image: grafana/grafana:latest
+    container_name: grafana
+    networks:
+      br-5gcore:
+        ipv4_address: 172.20.0.34
+    ports:
+      - "3000:3000"
+    environment:
+      - GF_SECURITY_ADMIN_USER=admin
+      - GF_SECURITY_ADMIN_PASSWORD=admin
+    depends_on:
+      - prometheus

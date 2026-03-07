@@ -31,3 +31,20 @@ services:
       - ./config-ueransim:/mnt/ueransim
     depends_on:
       - gnb
+
+  ue-urllc:
+    image: gradiant/ueransim:3.2.6
+    container_name: ue-urllc
+    entrypoint: ["nr-ue", "-c", "/mnt/ueransim/ue-urllc.yaml"]
+    privileged: true
+    cap_add:
+      - NET_ADMIN
+    devices:
+      - "/dev/net/tun:/dev/net/tun"
+    networks:
+      br-5gcore:
+        ipv4_address: 172.20.0.22
+    volumes:
+      - ./config-ueransim:/mnt/ueransim
+    depends_on:
+      - gnb

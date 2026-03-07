@@ -12,8 +12,10 @@ smf:
       - address: 172.20.0.5
     client:
       upf:
-        - address: 172.20.0.7
-        - address: 172.20.0.8
+        - address: 172.20.0.7 #UPF EMBB
+          dnn: internet
+        - address: 172.20.0.8 #UPF uRLLC
+          dnn: internet2
 
   gtpu:
     server:
@@ -26,7 +28,9 @@ smf:
   mtu: 1400
 
   session:
-    - name: internet
-      subnet: 10.45.0.0/16
-    - name: internet
-      subnet: 10.46.0.0/16
+  - dnn: internet
+    subnet: 10.45.0.0/16
+    gateway: 10.45.0.1
+  - dnn: internet2
+    subnet: 10.46.0.0/16
+    gateway: 10.46.0.254

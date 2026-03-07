@@ -11,4 +11,5 @@ amfConfigs:
     port: 38412
 slices:
   - sst: 1
+  - sst: 2
 ignoreStreamIds: true

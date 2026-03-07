@@ -7,3 +7,4 @@ upf:
       - address: 172.20.0.8
   session:
     - subnet: 10.46.0.0/16
+      gateway: 10.46.0.254

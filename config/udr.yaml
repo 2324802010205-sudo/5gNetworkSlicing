@@ -12,7 +12,7 @@ udr:
         port: 7777
     client:
       nrf:
-        - uri: http://172.20.3:7777
+        - uri: http://172.20.0.3:7777
 
   mongodb:
     name: open5gs
