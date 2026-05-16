@@ -1,0 +1,235 @@
+{
+  "title": "5G Network Slicing - Bandwidth Monitor",
+  "uid": "5g-bandwidth",
+  "timezone": "browser",
+  "refresh": "5s",
+  "time": { "from": "now-15m", "to": "now" },
+  "panels": [
+    {
+      "id": 1,
+      "title": "eMBB TX Bandwidth (Mbps)",
+      "type": "stat",
+      "gridPos": { "x": 0, "y": 0, "w": 6, "h": 4 },
+      "targets": [{
+        "datasource": "prometheus",
+        "expr": "rate(upf_embb_tx_bytes[30s]) * 8 / 1000000",
+        "legendFormat": "eMBB TX Mbps"
+      }],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "Mbps",
+          "decimals": 2,
+          "color": { "mode": "thresholds" },
+          "thresholds": {
+            "steps": [
+              { "color": "green", "value": 0 },
+              { "color": "yellow", "value": 50 },
+              { "color": "red", "value": 90 }
+            ]
+          }
+        }
+      },
+      "options": { "colorMode": "background", "graphMode": "area" }
+    },
+    {
+      "id": 2,
+      "title": "eMBB RX Bandwidth (Mbps)",
+      "type": "stat",
+      "gridPos": { "x": 6, "y": 0, "w": 6, "h": 4 },
+      "targets": [{
+        "datasource": "prometheus",
+        "expr": "rate(upf_embb_rx_bytes[30s]) * 8 / 1000000",
+        "legendFormat": "eMBB RX Mbps"
+      }],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "Mbps",
+          "decimals": 2,
+          "color": { "mode": "thresholds" },
+          "thresholds": {
+            "steps": [
+              { "color": "blue", "value": 0 },
+              { "color": "yellow", "value": 50 },
+              { "color": "red", "value": 90 }
+            ]
+          }
+        }
+      },
+      "options": { "colorMode": "background", "graphMode": "area" }
+    },
+    {
+      "id": 3,
+      "title": "URLLC TX Bandwidth (Mbps)",
+      "type": "stat",
+      "gridPos": { "x": 12, "y": 0, "w": 6, "h": 4 },
+      "targets": [{
+        "datasource": "prometheus",
+        "expr": "rate(upf_urllc_tx_bytes[30s]) * 8 / 1000000",
+        "legendFormat": "URLLC TX Mbps"
+      }],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "Mbps",
+          "decimals": 2,
+          "color": { "mode": "thresholds" },
+          "thresholds": {
+            "steps": [
+              { "color": "green", "value": 0 },
+              { "color": "yellow", "value": 25 },
+              { "color": "red", "value": 45 }
+            ]
+          }
+        }
+      },
+      "options": { "colorMode": "background", "graphMode": "area" }
+    },
+    {
+      "id": 4,
+      "title": "URLLC RX Bandwidth (Mbps)",
+      "type": "stat",
+      "gridPos": { "x": 18, "y": 0, "w": 6, "h": 4 },
+      "targets": [{
+        "datasource": "prometheus",
+        "expr": "rate(upf_urllc_rx_bytes[30s]) * 8 / 1000000",
+        "legendFormat": "URLLC RX Mbps"
+      }],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "Mbps",
+          "decimals": 2,
+          "color": { "mode": "thresholds" },
+          "thresholds": {
+            "steps": [
+              { "color": "orange", "value": 0 },
+              { "color": "yellow", "value": 25 },
+              { "color": "red", "value": 45 }
+            ]
+          }
+        }
+      },
+      "options": { "colorMode": "background", "graphMode": "area" }
+    },
+    {
+      "id": 5,
+      "title": "Bandwidth So Sánh 2 Slice - TX (Mbps)",
+      "type": "timeseries",
+      "gridPos": { "x": 0, "y": 4, "w": 24, "h": 8 },
+      "targets": [
+        {
+          "datasource": "prometheus",
+          "expr": "rate(upf_embb_tx_bytes[30s]) * 8 / 1000000",
+          "legendFormat": "eMBB TX (max 100Mbps)"
+        },
+        {
+          "datasource": "prometheus",
+          "expr": "rate(upf_urllc_tx_bytes[30s]) * 8 / 1000000",
+          "legendFormat": "URLLC TX (max 50Mbps)"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "Mbps",
+          "decimals": 2,
+          "custom": { "lineWidth": 2, "fillOpacity": 15 },
+          "color": { "mode": "palette-classic" }
+        }
+      },
+      "options": {
+        "legend": { "displayMode": "list", "placement": "bottom" },
+        "tooltip": { "mode": "multi" }
+      }
+    },
+    {
+      "id": 6,
+      "title": "Bandwidth So Sánh 2 Slice - RX (Mbps)",
+      "type": "timeseries",
+      "gridPos": { "x": 0, "y": 12, "w": 24, "h": 8 },
+      "targets": [
+        {
+          "datasource": "prometheus",
+          "expr": "rate(upf_embb_rx_bytes[30s]) * 8 / 1000000",
+          "legendFormat": "eMBB RX"
+        },
+        {
+          "datasource": "prometheus",
+          "expr": "rate(upf_urllc_rx_bytes[30s]) * 8 / 1000000",
+          "legendFormat": "URLLC RX"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "Mbps",
+          "decimals": 2,
+          "custom": { "lineWidth": 2, "fillOpacity": 15 },
+          "color": { "mode": "palette-classic" }
+        }
+      },
+      "options": {
+        "legend": { "displayMode": "list", "placement": "bottom" },
+        "tooltip": { "mode": "multi" }
+      }
+    },
+    {
+      "id": 7,
+      "title": "Total Data Volume - eMBB vs URLLC (MB)",
+      "type": "timeseries",
+      "gridPos": { "x": 0, "y": 20, "w": 12, "h": 8 },
+      "targets": [
+        {
+          "datasource": "prometheus",
+          "expr": "upf_embb_tx_bytes / 1000000",
+          "legendFormat": "eMBB Total TX (MB)"
+        },
+        {
+          "datasource": "prometheus",
+          "expr": "upf_urllc_tx_bytes / 1000000",
+          "legendFormat": "URLLC Total TX (MB)"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "MB",
+          "decimals": 2,
+          "custom": { "lineWidth": 2, "fillOpacity": 10 },
+          "color": { "mode": "palette-classic" }
+        }
+      }
+    },
+    {
+      "id": 8,
+      "title": "Active UEs & Sessions",
+      "type": "timeseries",
+      "gridPos": { "x": 12, "y": 20, "w": 12, "h": 8 },
+      "targets": [
+        {
+          "datasource": "prometheus",
+          "expr": "ues_active",
+          "legendFormat": "Active UEs"
+        },
+        {
+          "datasource": "prometheus",
+          "expr": "pfcp_sessions_active",
+          "legendFormat": "PFCP Sessions"
+        },
+        {
+          "datasource": "prometheus",
+          "expr": "fivegs_smffunction_sm_sessionnbr{snssai=~\"1-.*\"}",
+          "legendFormat": "eMBB Sessions"
+        },
+        {
+          "datasource": "prometheus",
+          "expr": "fivegs_smffunction_sm_sessionnbr{snssai=~\"2-.*\"}",
+          "legendFormat": "URLLC Sessions"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "custom": { "lineWidth": 2, "fillOpacity": 10 },
+          "color": { "mode": "palette-classic" }
+        }
+      }
+    }
+  ],
+  "schemaVersion": 38,
+  "version": 1
+}

@@ -1,11 +1,54 @@
-logger:
-  level: info
-
 pcf:
   sbi:
     server:
-      - address: 172.20.0.12
+      - dev: eth0
         port: 7777
     client:
       nrf:
-        - uri: http://172.20.0.3:7777
+        - uri: http://nrf:7777
+  metrics:
+    server:
+      - dev: eth0
+        port: 9090
+  policy:
+    - plmn_id:
+        mcc: 901
+        mnc: 70
+      slice:
+        - sst: 1
+          sd: 0x000001
+          default_indicator: true
+          session:
+            - name: internet
+              type: 3
+              qos:
+                index: 9
+                arp:
+                  priority_level: 8
+                  pre_emption_capability: 1
+                  pre_emption_vulnerability: 1
+              ambr:
+                downlink:
+                  value: 200
+                  unit: 2
+                uplink:
+                  value: 100
+                  unit: 2
+        - sst: 2
+          sd: 0x000002
+          session:
+            - name: internet2
+              type: 3
+              qos:
+                index: 82
+                arp:
+                  priority_level: 2
+                  pre_emption_capability: 1
+                  pre_emption_vulnerability: 2
+              ambr:
+                downlink:
+                  value: 50
+                  unit: 2
+                uplink:
+                  value: 50
+                  unit: 2

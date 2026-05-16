@@ -3,13 +3,22 @@ mnc: '70'
 nci: '0x000000010'
 idLength: 32
 tac: 1
-linkIp: 172.20.0.20
-ngapIp: 172.20.0.20
-gtpIp: 172.20.0.20
+
+# gNB sử dụng IP tĩnh 172.20.1.10
+linkIp: 172.20.1.10
+ngapIp: 172.20.1.10
+gtpIp: 172.20.1.10
+
+# AMF configuration - kết nối tới AMF IP tĩnh
 amfConfigs:
-  - address: 172.20.0.4
+  - address: 172.20.0.20
     port: 38412
+
+# Hỗ trợ 2 slices: eMBB, URLLC
 slices:
-  - sst: 1
-  - sst: 2
+  - sst: 1  # eMBB - Enhanced Mobile Broadband
+    sd: 0x000001
+  - sst: 2  # URLLC - Ultra-Reliable Low-Latency
+    sd: 0x000002
+
 ignoreStreamIds: true

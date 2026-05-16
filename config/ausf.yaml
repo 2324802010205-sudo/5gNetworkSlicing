@@ -1,8 +1,10 @@
 ausf:
   sbi:
     server:
-      - address: 172.20.0.6
+      - dev: eth0
         port: 7777
     client:
       nrf:
-        - uri: http://172.20.0.3:7777
+        - uri: http://nrf:7777
+  logger:
+    level: info

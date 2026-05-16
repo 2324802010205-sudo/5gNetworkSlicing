@@ -1,10 +1,12 @@
 udm:
   sbi:
     server:
-      - address: 172.20.0.9
+      - dev: eth0
         port: 7777
     client:
       nrf:
-        - uri: http://172.20.0.3:7777
+        - uri: http://nrf:7777
       udr:
-        - uri: http://172.20.0.11:7777
+        - uri: http://udr:7777
+  logger:
+    level: info

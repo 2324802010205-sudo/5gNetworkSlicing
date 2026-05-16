@@ -1,19 +1,16 @@
-logger:
-  level: info
-
-global:
-  max:
-    ue: 1024
-
 udr:
   sbi:
     server:
-      - address: 172.20.0.11
+      - dev: eth0
         port: 7777
     client:
       nrf:
-        - uri: http://172.20.0.3:7777
-
+        - uri: http://nrf:7777
   mongodb:
     name: open5gs
-    url: mongodb://mongo/open5gs
+    url: mongodb://mongo:27017/open5gs
+  logger:
+    level: info
+  global:
+    max:
+      ue: 2048

@@ -1,5 +1,7 @@
 nrf:
   sbi:
     server:
-      - address: 172.20.0.3
+      - dev: eth0
         port: 7777
+  logger:
+    level: info

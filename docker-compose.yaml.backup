@@ -1,0 +1,294 @@
+version: '3.8'
+
+networks:
+  br-5gcore:
+    driver: bridge
+    ipam:
+      driver: default
+      config:
+        - subnet: 172.20.0.0/16
+          gateway: 172.20.0.1
+
+services:
+  # Database
+  mongo:
+    image: mongo:6-jammy
+    container_name: mongo
+    restart: always
+    command: ["mongod", "--bind_ip_all"]
+    networks:
+      - br-5gcore
+    volumes:
+      - ./mongodb_data:/data/db
+    healthcheck:
+      test: echo 'db.runCommand("ping").ok' | mongosh localhost:27017/test --quiet
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # NRF - Network Repository Function
+  nrf:
+    image: gradiant/open5gs:2.7.5
+    container_name: nrf
+    command: open5gs-nrfd -c /opt/open5gs/etc/open5gs/nrf.yaml
+    depends_on:
+      mongo:
+        condition: service_healthy
+    networks:
+      - br-5gcore
+    volumes:
+      - ./config/nrf.yaml:/opt/open5gs/etc/open5gs/nrf.yaml:ro
+    healthcheck:
+      test: ["CMD", "nc", "-z", "localhost", "7777"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # AMF - Access and Mobility Management Function
+  amf:
+    image: gradiant/open5gs:2.7.5
+    container_name: amf
+    command: open5gs-amfd -c /opt/open5gs/etc/open5gs/amf.yaml
+    depends_on:
+      nrf:
+        condition: service_healthy
+    networks:
+      - br-5gcore
+    volumes:
+      - ./config/amf.yaml:/opt/open5gs/etc/open5gs/amf.yaml:ro
+
+  # SMF - Session Management Function
+  smf:
+    image: gradiant/open5gs:2.7.5
+    container_name: smf
+    command: open5gs-smfd -c /opt/open5gs/etc/open5gs/smf.yaml
+    depends_on:
+      nrf:
+        condition: service_healthy
+    networks:
+      - br-5gcore
+    volumes:
+      - ./config/smf.yaml:/opt/open5gs/etc/open5gs/smf.yaml:ro
+
+  # AUSF - Authentication Server Function
+  ausf:
+    image: gradiant/open5gs:2.7.5
+    container_name: ausf
+    command: open5gs-ausfd -c /opt/open5gs/etc/open5gs/ausf.yaml
+    depends_on:
+      nrf:
+        condition: service_healthy
+    networks:
+      - br-5gcore
+    volumes:
+      - ./config/ausf.yaml:/opt/open5gs/etc/open5gs/ausf.yaml:ro
+
+  # UDM - Unified Data Management
+  udm:
+    image: gradiant/open5gs:2.7.5
+    container_name: udm
+    command: open5gs-udmd -c /opt/open5gs/etc/open5gs/udm.yaml
+    depends_on:
+      nrf:
+        condition: service_healthy
+    networks:
+      - br-5gcore
+    volumes:
+      - ./config/udm.yaml:/opt/open5gs/etc/open5gs/udm.yaml:ro
+
+  # UDR - Unified Data Repository
+  udr:
+    image: gradiant/open5gs:2.7.5
+    container_name: udr
+    command: open5gs-udrd -c /opt/open5gs/etc/open5gs/udr.yaml
+    depends_on:
+      mongo:
+        condition: service_healthy
+      nrf:
+        condition: service_healthy
+    networks:
+      - br-5gcore
+    volumes:
+      - ./config/udr.yaml:/opt/open5gs/etc/open5gs/udr.yaml:ro
+
+  # PCF - Policy Control Function
+  pcf:
+    image: gradiant/open5gs:2.7.5
+    container_name: pcf
+    command: open5gs-pcfd -c /opt/open5gs/etc/open5gs/pcf.yaml
+    depends_on:
+      nrf:
+        condition: service_healthy
+    networks:
+      - br-5gcore
+    volumes:
+      - ./config/pcf.yaml:/opt/open5gs/etc/open5gs/pcf.yaml:ro
+
+  # UPF eMBB - Enhanced Mobile Broadband (High bandwidth, moderate latency)
+  upf-embb:
+    image: gradiant/open5gs:2.7.5
+    container_name: upf-embb
+    user: root
+    command: open5gs-upfd -c /opt/open5gs/etc/open5gs/upf-embb.yaml
+    privileged: true
+    cap_add:
+      - NET_ADMIN
+    devices:
+      - /dev/net/tun:/dev/net/tun
+    networks:
+      - br-5gcore
+    volumes:
+      - ./config/upf-embb.yaml:/opt/open5gs/etc/open5gs/upf-embb.yaml:ro
+    deploy:
+      resources:
+        limits:
+          cpus: '4.0'
+          memory: 6G
+        reservations:
+          cpus: '2.0'
+          memory: 4G
+
+  # UPF URLLC - Ultra-Reliable Low-Latency Communications
+  upf-urllc:
+    image: gradiant/open5gs:2.7.5
+    container_name: upf-urllc
+    user: root
+    command: open5gs-upfd -c /opt/open5gs/etc/open5gs/upf-urllc.yaml
+    privileged: true
+    cap_add:
+      - NET_ADMIN
+    devices:
+      - /dev/net/tun:/dev/net/tun
+    networks:
+      - br-5gcore
+    volumes:
+      - ./config/upf-urllc.yaml:/opt/open5gs/etc/open5gs/upf-urllc.yaml:ro
+    deploy:
+      resources:
+        limits:
+          cpus: '3.0'
+          memory: 3G
+        reservations:
+          cpus: '1.5'
+          memory: 2G
+
+  # WebUI
+  webui:
+    image: gradiant/open5gs-webui:2.7.5
+    container_name: webui
+    depends_on:
+      mongo:
+        condition: service_healthy
+    environment:
+      - DB_URI=mongodb://mongo:27017/open5gs
+    networks:
+      - br-5gcore
+    ports:
+      - "9999:9999"
+
+  # gNodeB
+  gnb:
+    image: gradiant/ueransim:3.2.6
+    container_name: gnb
+    entrypoint: ["nr-gnb", "-c", "/mnt/ueransim/gnb.yaml"]
+    networks:
+      - br-5gcore
+    volumes:
+      - ./config-ueransim:/mnt/ueransim
+    cap_add:
+      - NET_ADMIN
+    depends_on:
+      - amf
+
+  # UE eMBB
+  ue-embb:
+    image: gradiant/ueransim:3.2.6
+    container_name: ue-embb
+    entrypoint: ["nr-ue", "-c", "/mnt/ueransim/ue-embb.yaml"]
+    privileged: true
+    cap_add:
+      - NET_ADMIN
+    devices:
+      - "/dev/net/tun:/dev/net/tun"
+    networks:
+      - br-5gcore
+    volumes:
+      - ./config-ueransim:/mnt/ueransim
+    depends_on:
+      - gnb
+
+  # UE URLLC
+  ue-urllc:
+    image: gradiant/ueransim:3.2.6
+    container_name: ue-urllc
+    entrypoint: ["nr-ue", "-c", "/mnt/ueransim/ue-urllc.yaml"]
+    privileged: true
+    cap_add:
+      - NET_ADMIN
+    devices:
+      - "/dev/net/tun:/dev/net/tun"
+    networks:
+      - br-5gcore
+    volumes:
+      - ./config-ueransim:/mnt/ueransim
+    depends_on:
+      - gnb
+
+  # Monitoring Stack
+  node-exporter:
+    image: prom/node-exporter:latest
+    container_name: node-exporter
+    networks:
+      - br-5gcore
+    command:
+      - '--path.rootfs=/host'
+    volumes:
+      - /:/host:ro,rslave
+
+  cadvisor:
+    image: gcr.io/cadvisor/cadvisor:latest
+    container_name: cadvisor
+    privileged: true
+    networks:
+      - br-5gcore
+    volumes:
+      - /:/rootfs:ro
+      - /var/run:/var/run:ro
+      - /sys:/sys:ro
+      - /var/lib/docker/:/var/lib/docker:ro
+      - /dev/disk/:/dev/disk:ro
+
+  prometheus:
+    image: prom/prometheus:latest
+    container_name: prometheus
+    networks:
+      - br-5gcore
+    volumes:
+      - ./config/prometheus.yml:/etc/prometheus/prometheus.yml
+      - ./prometheus_data:/prometheus
+    ports:
+      - "9090:9090"
+    command:
+      - '--config.file=/etc/prometheus/prometheus.yml'
+      - '--storage.tsdb.path=/prometheus'
+    depends_on:
+      - cadvisor
+      - node-exporter
+
+  grafana:
+    image: grafana/grafana:latest
+    container_name: grafana
+    networks:
+      - br-5gcore
+    ports:
+      - "3000:3000"
+    environment:
+      - GF_SECURITY_ADMIN_USER=admin
+      - GF_SECURITY_ADMIN_PASSWORD=admin
+      - GF_INSTALL_PLUGINS=grafana-clock-panel
+    volumes:
+      - ./grafana_data:/var/lib/grafana
+      - ./config/grafana-dashboards:/etc/grafana/provisioning/dashboards
+      - ./config/grafana-datasources:/etc/grafana/provisioning/datasources
+    depends_on:
+      - prometheus

@@ -1,12 +1,59 @@
 global:
   scrape_interval: 5s
   evaluation_interval: 5s
+  external_labels:
+    monitor: '5g-network-monitor'
 
 scrape_configs:
   - job_name: 'node-exporter'
     static_configs:
       - targets: ['node-exporter:9100']
+        labels:
+          group: 'infrastructure'
 
   - job_name: 'cadvisor'
     static_configs:
       - targets: ['cadvisor:8080']
+        labels:
+          group: 'containers'
+
+  - job_name: 'amf'
+    static_configs:
+      - targets: ['amf:9090']
+        labels:
+          group: '5g-core'
+          function: 'amf'
+
+  - job_name: 'smf'
+    static_configs:
+      - targets: ['smf:9090']
+        labels:
+          group: '5g-core'
+          function: 'smf'
+
+  - job_name: 'upf-embb'
+    static_configs:
+      - targets: ['upf-embb:9090']
+        labels:
+          group: '5g-upf'
+          slice: 'embb'
+
+  - job_name: 'upf-urllc'
+    static_configs:
+      - targets: ['upf-urllc:9090']
+        labels:
+          group: '5g-upf'
+          slice: 'urllc'
+
+  - job_name: 'pcf'
+    static_configs:
+      - targets: ['pcf:9090']
+        labels:
+          group: '5g-core'
+          function: 'pcf'
+  - job_name: 'pushgateway'
+    honor_labels: true
+    static_configs:
+      - targets: ['pushgateway:9091']
+        labels:
+          group: '5g-upf-metrics'

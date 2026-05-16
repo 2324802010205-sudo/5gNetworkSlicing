@@ -1,0 +1,257 @@
+{
+  "title": "5G Network Slicing - QoS Monitor",
+  "uid": "5g-slicing-qos",
+  "timezone": "browser",
+  "refresh": "5s",
+  "time": { "from": "now-15m", "to": "now" },
+  "panels": [
+    {
+      "id": 1,
+      "title": "Active UEs",
+      "type": "stat",
+      "gridPos": { "x": 0, "y": 0, "w": 4, "h": 4 },
+      "targets": [{
+        "datasource": "prometheus",
+        "expr": "ues_active",
+        "legendFormat": "UEs"
+      }],
+      "options": {
+        "colorMode": "background",
+        "graphMode": "none",
+        "textMode": "auto"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "color": { "mode": "thresholds" },
+          "thresholds": {
+            "steps": [
+              { "color": "red", "value": 0 },
+              { "color": "green", "value": 1 }
+            ]
+          }
+        }
+      }
+    },
+    {
+      "id": 2,
+      "title": "Active PFCP Sessions",
+      "type": "stat",
+      "gridPos": { "x": 4, "y": 0, "w": 4, "h": 4 },
+      "targets": [{
+        "datasource": "prometheus",
+        "expr": "pfcp_sessions_active",
+        "legendFormat": "Sessions"
+      }],
+      "options": {
+        "colorMode": "background",
+        "graphMode": "none"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "color": { "mode": "thresholds" },
+          "thresholds": {
+            "steps": [
+              { "color": "red", "value": 0 },
+              { "color": "green", "value": 1 }
+            ]
+          }
+        }
+      }
+    },
+    {
+      "id": 3,
+      "title": "eMBB Slice Sessions (SST:1)",
+      "type": "stat",
+      "gridPos": { "x": 8, "y": 0, "w": 4, "h": 4 },
+      "targets": [{
+        "datasource": "prometheus",
+        "expr": "fivegs_smffunction_sm_sessionnbr{snssai=~\"1-.*\"}",
+        "legendFormat": "eMBB"
+      }],
+      "options": { "colorMode": "background", "graphMode": "none" },
+      "fieldConfig": {
+        "defaults": {
+          "color": { "mode": "thresholds" },
+          "thresholds": {
+            "steps": [
+              { "color": "red", "value": 0 },
+              { "color": "blue", "value": 1 }
+            ]
+          }
+        }
+      }
+    },
+    {
+      "id": 4,
+      "title": "URLLC Slice Sessions (SST:2)",
+      "type": "stat",
+      "gridPos": { "x": 12, "y": 0, "w": 4, "h": 4 },
+      "targets": [{
+        "datasource": "prometheus",
+        "expr": "fivegs_smffunction_sm_sessionnbr{snssai=~\"2-.*\"}",
+        "legendFormat": "URLLC"
+      }],
+      "options": { "colorMode": "background", "graphMode": "none" },
+      "fieldConfig": {
+        "defaults": {
+          "color": { "mode": "thresholds" },
+          "thresholds": {
+            "steps": [
+              { "color": "red", "value": 0 },
+              { "color": "orange", "value": 1 }
+            ]
+          }
+        }
+      }
+    },
+    {
+      "id": 5,
+      "title": "UPF QoS Flows per Slice",
+      "type": "bargauge",
+      "gridPos": { "x": 16, "y": 0, "w": 8, "h": 4 },
+      "targets": [
+        {
+          "datasource": "prometheus",
+          "expr": "fivegs_upffunction_upf_qosflows{dnn=\"internet\"}",
+          "legendFormat": "eMBB (DNN: internet)"
+        },
+        {
+          "datasource": "prometheus",
+          "expr": "fivegs_upffunction_upf_qosflows{dnn=\"internet2\"}",
+          "legendFormat": "URLLC (DNN: internet2)"
+        }
+      ],
+      "options": { "orientation": "horizontal" },
+      "fieldConfig": {
+        "defaults": {
+          "color": { "mode": "palette-classic" }
+        }
+      }
+    },
+    {
+      "id": 6,
+      "title": "SMF Sessions theo Slice (Timeline)",
+      "type": "timeseries",
+      "gridPos": { "x": 0, "y": 4, "w": 12, "h": 8 },
+      "targets": [
+        {
+          "datasource": "prometheus",
+          "expr": "fivegs_smffunction_sm_sessionnbr{snssai=~\"1-.*\"}",
+          "legendFormat": "eMBB SST:1"
+        },
+        {
+          "datasource": "prometheus",
+          "expr": "fivegs_smffunction_sm_sessionnbr{snssai=~\"2-.*\"}",
+          "legendFormat": "URLLC SST:2"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "custom": { "lineWidth": 2, "fillOpacity": 10 },
+          "color": { "mode": "palette-classic" }
+        }
+      },
+      "options": { "legend": { "displayMode": "list", "placement": "bottom" } }
+    },
+    {
+      "id": 7,
+      "title": "PFCP Sessions Active (Timeline)",
+      "type": "timeseries",
+      "gridPos": { "x": 12, "y": 4, "w": 12, "h": 8 },
+      "targets": [
+        {
+          "datasource": "prometheus",
+          "expr": "pfcp_sessions_active",
+          "legendFormat": "PFCP Sessions"
+        },
+        {
+          "datasource": "prometheus",
+          "expr": "ues_active",
+          "legendFormat": "Active UEs"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "custom": { "lineWidth": 2, "fillOpacity": 10 },
+          "color": { "mode": "palette-classic" }
+        }
+      }
+    },
+    {
+      "id": 8,
+      "title": "UPF eMBB - GTP Packets (N3 Interface)",
+      "type": "timeseries",
+      "gridPos": { "x": 0, "y": 12, "w": 12, "h": 8 },
+      "targets": [
+        {
+          "datasource": "prometheus",
+          "expr": "rate(fivegs_ep_n3_gtp_indatapktn3upf[1m])",
+          "legendFormat": "eMBB RX packets/s"
+        },
+        {
+          "datasource": "prometheus",
+          "expr": "rate(fivegs_ep_n3_gtp_outdatapktn3upf[1m])",
+          "legendFormat": "eMBB TX packets/s"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "pps",
+          "custom": { "lineWidth": 2, "fillOpacity": 10 },
+          "color": { "mode": "palette-classic" }
+        }
+      }
+    },
+    {
+      "id": 9,
+      "title": "UPF URLLC - GTP Packets (N3 Interface)",
+      "type": "timeseries",
+      "gridPos": { "x": 12, "y": 12, "w": 12, "h": 8 },
+      "targets": [
+        {
+          "datasource": "prometheus",
+          "expr": "rate(fivegs_ep_n3_gtp_indatapktn3upf[1m])",
+          "legendFormat": "URLLC RX packets/s"
+        },
+        {
+          "datasource": "prometheus",
+          "expr": "rate(fivegs_ep_n3_gtp_outdatapktn3upf[1m])",
+          "legendFormat": "URLLC TX packets/s"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "pps",
+          "custom": { "lineWidth": 2, "fillOpacity": 10 },
+          "color": { "mode": "palette-classic" }
+        }
+      }
+    },
+    {
+      "id": 10,
+      "title": "N4 Session Establishments",
+      "type": "timeseries",
+      "gridPos": { "x": 0, "y": 20, "w": 24, "h": 8 },
+      "targets": [
+        {
+          "datasource": "prometheus",
+          "expr": "fivegs_upffunction_sm_n4sessionestabreq",
+          "legendFormat": "eMBB N4 Session Req"
+        },
+        {
+          "datasource": "prometheus",
+          "expr": "fivegs_upffunction_sm_n4sessionestabreq",
+          "legendFormat": "URLLC N4 Session Req"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "custom": { "lineWidth": 2, "fillOpacity": 10 },
+          "color": { "mode": "palette-classic" }
+        }
+      }
+    }
+  ],
+  "schemaVersion": 38,
+  "version": 1
+}

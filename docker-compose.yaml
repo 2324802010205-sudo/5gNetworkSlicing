@@ -1,6 +1,13 @@
+version: '3.8'
+
 networks:
   br-5gcore:
-    external: true
+    driver: bridge
+    ipam:
+      driver: default
+      config:
+        - subnet: 172.20.0.0/16
+          gateway: 172.20.0.1
 
 services:
   mongo:
@@ -10,21 +17,39 @@ services:
     command: ["mongod", "--bind_ip_all"]
     networks:
       br-5gcore:
-        ipv4_address: 172.20.0.2
+        ipv4_address: 172.20.0.5
     volumes:
       - ./mongodb_data:/data/db
+    healthcheck:
+      test: ["CMD-SHELL", "echo 'db.runCommand(\"ping\").ok' | mongosh localhost:27017/test --quiet || exit 1"]
+      interval: 5s
+      timeout: 10s
+      retries: 10
+      start_period: 30s
+    deploy:
+      resources:
+        limits:
+          cpus: '0.5'
+          memory: 512M
 
   nrf:
     image: gradiant/open5gs:2.7.5
     container_name: nrf
     command: open5gs-nrfd -c /opt/open5gs/etc/open5gs/nrf.yaml
     depends_on:
-      - mongo
+      mongo:
+        condition: service_healthy
     networks:
       br-5gcore:
-        ipv4_address: 172.20.0.3
+        ipv4_address: 172.20.0.10
     volumes:
       - ./config/nrf.yaml:/opt/open5gs/etc/open5gs/nrf.yaml:ro
+    restart: unless-stopped
+    deploy:
+      resources:
+        limits:
+          cpus: '0.3'
+          memory: 256M
 
   amf:
     image: gradiant/open5gs:2.7.5
@@ -34,9 +59,15 @@ services:
       - nrf
     networks:
       br-5gcore:
-        ipv4_address: 172.20.0.4
+        ipv4_address: 172.20.0.20
     volumes:
       - ./config/amf.yaml:/opt/open5gs/etc/open5gs/amf.yaml:ro
+    restart: unless-stopped
+    deploy:
+      resources:
+        limits:
+          cpus: '0.5'
+          memory: 512M
 
   smf:
     image: gradiant/open5gs:2.7.5
@@ -46,9 +77,15 @@ services:
       - nrf
     networks:
       br-5gcore:
-        ipv4_address: 172.20.0.5
+        ipv4_address: 172.20.0.30
     volumes:
       - ./config/smf.yaml:/opt/open5gs/etc/open5gs/smf.yaml:ro
+    restart: unless-stopped
+    deploy:
+      resources:
+        limits:
+          cpus: '0.5'
+          memory: 512M
 
   ausf:
     image: gradiant/open5gs:2.7.5
@@ -58,9 +95,15 @@ services:
       - nrf
     networks:
       br-5gcore:
-        ipv4_address: 172.20.0.6
+        ipv4_address: 172.20.0.40
     volumes:
       - ./config/ausf.yaml:/opt/open5gs/etc/open5gs/ausf.yaml:ro
+    restart: unless-stopped
+    deploy:
+      resources:
+        limits:
+          cpus: '0.2'
+          memory: 256M
 
   udm:
     image: gradiant/open5gs:2.7.5
@@ -70,9 +113,15 @@ services:
       - nrf
     networks:
       br-5gcore:
-        ipv4_address: 172.20.0.9
+        ipv4_address: 172.20.0.50
     volumes:
       - ./config/udm.yaml:/opt/open5gs/etc/open5gs/udm.yaml:ro
+    restart: unless-stopped
+    deploy:
+      resources:
+        limits:
+          cpus: '0.2'
+          memory: 256M
 
   udr:
     image: gradiant/open5gs:2.7.5
@@ -83,9 +132,16 @@ services:
       - nrf
     networks:
       br-5gcore:
-        ipv4_address: 172.20.0.11
+        ipv4_address: 172.20.0.60
     volumes:
       - ./config/udr.yaml:/opt/open5gs/etc/open5gs/udr.yaml:ro
+    restart: unless-stopped
+    deploy:
+      resources:
+        limits:
+          cpus: '0.2'
+          memory: 256M
+
   pcf:
     image: gradiant/open5gs:2.7.5
     container_name: pcf
@@ -94,115 +150,212 @@ services:
       - nrf
     networks:
       br-5gcore:
-        ipv4_address: 172.20.0.12
+        ipv4_address: 172.20.0.70
     volumes:
       - ./config/pcf.yaml:/opt/open5gs/etc/open5gs/pcf.yaml:ro
+    restart: unless-stopped
+    deploy:
+      resources:
+        limits:
+          cpus: '0.2'
+          memory: 256M
 
   upf-embb:
     image: gradiant/open5gs:2.7.5
     container_name: upf-embb
     user: root
-    command: open5gs-upfd -c /opt/open5gs/etc/open5gs/upf-embb.yaml
+    entrypoint: ["/bin/bash", "/scripts/upf-embb-start.sh"]
     privileged: true
     cap_add:
       - NET_ADMIN
     devices:
       - /dev/net/tun:/dev/net/tun
+    environment:
+      - IPV4_TUN_ADDR=10.45.0.1/16
+      - IPV4_TUN_SUBNET=10.45.0.0/16
+      - IPV6_TUN_ADDR=cafe::1/64
+      - ENABLE_NAT=true
     networks:
       br-5gcore:
-        ipv4_address: 172.20.0.7
+        ipv4_address: 172.20.0.100
     volumes:
       - ./config/upf-embb.yaml:/opt/open5gs/etc/open5gs/upf-embb.yaml:ro
+      - ./scripts/upf-embb-start.sh:/scripts/upf-embb-start.sh:ro
+    restart: unless-stopped
     deploy:
       resources:
         limits:
           cpus: '2.0'
           memory: 2G
+        reservations:
+          cpus: '1.0'
+          memory: 1G
 
   upf-urllc:
     image: gradiant/open5gs:2.7.5
     container_name: upf-urllc
     user: root
-    command: open5gs-upfd -c /opt/open5gs/etc/open5gs/upf-urllc.yaml
+    entrypoint: ["/bin/bash", "/scripts/upf-urllc-start.sh"]
     privileged: true
     cap_add:
       - NET_ADMIN
     devices:
       - /dev/net/tun:/dev/net/tun
+    environment:
+      - IPV4_TUN_ADDR=10.46.0.1/16
+      - IPV4_TUN_SUBNET=10.46.0.0/16
+      - IPV6_TUN_ADDR=cafe::2/64
+      - ENABLE_NAT=true
     networks:
       br-5gcore:
-        ipv4_address: 172.20.0.8
+        ipv4_address: 172.20.0.101
     volumes:
       - ./config/upf-urllc.yaml:/opt/open5gs/etc/open5gs/upf-urllc.yaml:ro
-    # upf-urllc
+      - ./scripts/upf-urllc-start.sh:/scripts/upf-urllc-start.sh:ro
+    restart: unless-stopped
     deploy:
       resources:
         limits:
-          cpus: '1.0'
-          memory: 1G
+          cpus: '1.5'
+          memory: 1536M
+        reservations:
+          cpus: '0.8'
+          memory: 768M
 
   webui:
     image: gradiant/open5gs-webui:2.7.5
     container_name: webui
     depends_on:
-      - mongo
+      mongo:
+        condition: service_healthy
     environment:
       - DB_URI=mongodb://mongo:27017/open5gs
     networks:
       br-5gcore:
-        ipv4_address: 172.20.0.10
+        ipv4_address: 172.20.0.200
     ports:
       - "9999:9999"
-
-  node-exporter:
-    image: prom/node-exporter:latest
-    container_name: node-exporter
-    networks:
-      br-5gcore:
-        ipv4_address: 172.20.0.31
-    command:
-      - '--path.rootfs=/host'
-    volumes:
-      - /:/host:ro,rslave
-
-  cadvisor:
-    image: gcr.io/cadvisor/cadvisor:latest
-    container_name: cadvisor
-    privileged: true
-    networks:
-      br-5gcore:
-        ipv4_address: 172.20.0.32
-    volumes:
-      - /:/rootfs:ro
-      - /var/run:/var/run:ro
-      - /sys:/sys:ro
-      - /var/lib/docker/:/var/lib/docker:ro
-      - /dev/disk/:/dev/disk:ro
+    restart: unless-stopped
+    deploy:
+      resources:
+        limits:
+          cpus: '0.3'
+          memory: 256M
 
   prometheus:
     image: prom/prometheus:latest
     container_name: prometheus
     networks:
       br-5gcore:
-        ipv4_address: 172.20.0.33
+        ipv4_address: 172.20.0.210
     volumes:
       - ./config/prometheus.yml:/etc/prometheus/prometheus.yml
+      - ./prometheus_data:/prometheus
     ports:
       - "9090:9090"
-    depends_on:
-      - cadvisor
-      - node-exporter
+    command:
+      - '--config.file=/etc/prometheus/prometheus.yml'
+      - '--storage.tsdb.path=/prometheus'
+    restart: unless-stopped
+    deploy:
+      resources:
+        limits:
+          cpus: '0.5'
+          memory: 512M
 
   grafana:
     image: grafana/grafana:latest
     container_name: grafana
     networks:
       br-5gcore:
-        ipv4_address: 172.20.0.34
+        ipv4_address: 172.20.0.211
     ports:
       - "3000:3000"
     environment:
       - GF_SECURITY_ADMIN_USER=admin
       - GF_SECURITY_ADMIN_PASSWORD=admin
+      - GF_INSTALL_PLUGINS=grafana-clock-panel
+    volumes:
+      - ./grafana_data:/var/lib/grafana
     depends_on:
       - prometheus
+    restart: unless-stopped
+    deploy:
+      resources:
+        limits:
+          cpus: '0.5'
+          memory: 512M
+
+  gnb:
+    image: gradiant/ueransim:3.2.6
+    container_name: gnb
+    entrypoint: ["nr-gnb", "-c", "/mnt/ueransim/gnb.yaml"]
+    networks:
+      br-5gcore:
+        ipv4_address: 172.20.1.10
+    volumes:
+      - ./config-ueransim:/mnt/ueransim
+    cap_add:
+      - NET_ADMIN
+    depends_on:
+      - amf
+    restart: unless-stopped
+    deploy:
+      resources:
+        limits:
+          cpus: '0.5'
+          memory: 512M
+
+  ue-embb:
+    image: gradiant/ueransim:3.2.6
+    container_name: ue-embb
+    entrypoint: ["nr-ue", "-c", "/mnt/ueransim/ue-embb.yaml"]
+    privileged: true
+    cap_add:
+      - NET_ADMIN
+    devices:
+      - "/dev/net/tun:/dev/net/tun"
+    networks:
+      - br-5gcore
+    volumes:
+      - ./config-ueransim:/mnt/ueransim
+    depends_on:
+      - gnb
+    restart: unless-stopped
+    deploy:
+      resources:
+        limits:
+          cpus: '0.3'
+          memory: 256M
+
+  ue-urllc:
+    image: gradiant/ueransim:3.2.6
+    container_name: ue-urllc
+    entrypoint: ["nr-ue", "-c", "/mnt/ueransim/ue-urllc.yaml"]
+    privileged: true
+    cap_add:
+      - NET_ADMIN
+    devices:
+      - "/dev/net/tun:/dev/net/tun"
+    networks:
+      - br-5gcore
+    volumes:
+      - ./config-ueransim:/mnt/ueransim
+    depends_on:
+      - gnb
+    restart: unless-stopped
+    deploy:
+      resources:
+        limits:
+          cpus: '0.3'
+          memory: 256M
+
+  pushgateway:
+    image: prom/pushgateway:latest
+    container_name: pushgateway
+    networks:
+      br-5gcore:
+        ipv4_address: 172.20.0.212
+    ports:
+      - "9091:9091"
+    restart: unless-stopped

@@ -1,37 +1,56 @@
+version: '3.8'
+
+# RAN - gNB và UE (2 Slices: eMBB & URLLC)
+# gNB có IP Tĩnh, UE nhận IP Động từ UPF
+
 networks:
   br-5gcore:
     external: true
 
 services:
+  # gNodeB (IP Tĩnh)
   gnb:
     image: gradiant/ueransim:3.2.6
     container_name: gnb
     entrypoint: ["nr-gnb", "-c", "/mnt/ueransim/gnb.yaml"]
     networks:
       br-5gcore:
-        ipv4_address: 172.20.0.20
+        ipv4_address: 172.20.1.10
     volumes:
       - ./config-ueransim:/mnt/ueransim
     cap_add:
       - NET_ADMIN
+    restart: unless-stopped
+    deploy:
+      resources:
+        limits:
+          cpus: '0.5'
+          memory: 512M
 
+  # UE eMBB - Enhanced Mobile Broadband (IP Động từ UPF)
   ue:
     image: gradiant/ueransim:3.2.6
-    container_name: ue
-    entrypoint: ["nr-ue", "-c", "/mnt/ueransim/ue.yaml"]
+    container_name: ue-embb
+    entrypoint: ["nr-ue", "-c", "/mnt/ueransim/ue-embb.yaml"]
     privileged: true
     cap_add:
       - NET_ADMIN
     devices:
       - "/dev/net/tun:/dev/net/tun"
     networks:
-      br-5gcore:
-        ipv4_address: 172.20.0.21
+      - br-5gcore
     volumes:
       - ./config-ueransim:/mnt/ueransim
     depends_on:
       - gnb
+    restart: unless-stopped
+    deploy:
+      resources:
+        limits:
+          cpus: '0.3'
+          memory: 256M
 
+  # UE URLLC - Ultra-Reliable Low-Latency Communications (IP Động từ UPF)
   ue-urllc:
     image: gradiant/ueransim:3.2.6
     container_name: ue-urllc
@@ -42,9 +61,14 @@ services:
     devices:
       - "/dev/net/tun:/dev/net/tun"
     networks:
-      br-5gcore:
-        ipv4_address: 172.20.0.22
+      - br-5gcore
     volumes:
       - ./config-ueransim:/mnt/ueransim
     depends_on:
       - gnb
+    restart: unless-stopped
+    deploy:
+      resources:
+        limits:
+          cpus: '0.3'
+          memory: 256M

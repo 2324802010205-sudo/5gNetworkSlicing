@@ -1,18 +1,19 @@
 amf:
   amf_name: open5gs-amf
-
   sbi:
     server:
-      - address: 172.20.0.4
+      - dev: eth0
         port: 7777
     client:
       nrf:
-        - uri: http://172.20.0.3:7777
-
+        - uri: http://nrf:7777
   ngap:
     server:
-      - address: 172.20.0.4
-
+      - dev: eth0
+  metrics:
+    server:
+      - dev: eth0
+        port: 9090
   guami:
     - plmn_id:
         mcc: 901
@@ -20,21 +21,20 @@ amf:
       amf_id:
         region: 2
         set: 1
-
   tai:
     - plmn_id:
         mcc: 901
         mnc: 70
       tac: 1
-
   plmn_support:
     - plmn_id:
         mcc: 901
         mnc: 70
       s_nssai:
-        - sst: 1
-        - sst: 2
-
+        - sst: 1  # eMBB
+          sd: 0x000001
+        - sst: 2  # URLLC
+          sd: 0x000002
   security:
     integrity_order:
       - NIA2
@@ -44,9 +44,14 @@ amf:
       - NEA2
       - NEA1
       - NEA0
-
+  network_name:
+    full: Open5GS
+    short: Next
+  amf_name: open5gs-amf
   time:
     t3502:
       value: 720
     t3512:
       value: 540
+  logger:
+    level: info

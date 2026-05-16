@@ -1,4 +1,4 @@
+grafana_data/
+prometheus_data/
 mongodb_data/
-data/
-*.log
-.env
+*.pcap

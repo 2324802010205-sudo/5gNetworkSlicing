@@ -1,0 +1,120 @@
+{
+  "dashboard": {
+    "title": "5G Network Slicing - eMBB vs URLLC",
+    "tags": ["5g", "network-slicing"],
+    "timezone": "browser",
+    "panels": [
+      {
+        "id": 1,
+        "title": "eMBB Throughput (Mbps)",
+        "type": "graph",
+        "gridPos": {"h": 8, "w": 12, "x": 0, "y": 0},
+        "targets": [
+          {
+            "expr": "rate(fivegs_ep_n3_gtp_indatapktn3upf{job=\"upf-embb\"}[1m])",
+            "legendFormat": "eMBB Incoming Packets",
+            "refId": "A"
+          },
+          {
+            "expr": "rate(fivegs_ep_n3_gtp_outdatapktn3upf{job=\"upf-embb\"}[1m])",
+            "legendFormat": "eMBB Outgoing Packets",
+            "refId": "B"
+          }
+        ],
+        "yaxes": [
+          {"format": "Mbits", "label": "Throughput"},
+          {"format": "short"}
+        ]
+      },
+      {
+        "id": 2,
+        "title": "URLLC Throughput (Mbps)",
+        "type": "graph",
+        "gridPos": {"h": 8, "w": 12, "x": 12, "y": 0},
+        "targets": [
+          {
+            "expr": "rate(fivegs_ep_n3_gtp_indatapktn3upf{job=\"upf-urllc\"}[1m])",
+            "legendFormat": "URLLC Incoming Packets",
+            "refId": "A"
+          },
+          {
+            "expr": "rate(fivegs_ep_n3_gtp_outdatapktn3upf{job=\"upf-urllc\"}[1m])",
+            "legendFormat": "URLLC Outgoing Packets",
+            "refId": "B"
+          }
+        ],
+        "yaxes": [
+          {"format": "Mbits", "label": "Throughput"},
+          {"format": "short"}
+        ]
+      },
+      {
+        "id": 3,
+        "title": "Active Sessions",
+        "type": "stat",
+        "gridPos": {"h": 4, "w": 6, "x": 0, "y": 8},
+        "targets": [
+          {
+            "expr": "fivegs_upffunction_upf_sessionnbr{job=\"upf-embb\"}",
+            "legendFormat": "eMBB Sessions",
+            "refId": "A"
+          }
+        ],
+        "options": {
+          "colorMode": "value",
+          "graphMode": "area"
+        }
+      },
+      {
+        "id": 4,
+        "title": "URLLC Sessions",
+        "type": "stat",
+        "gridPos": {"h": 4, "w": 6, "x": 6, "y": 8},
+        "targets": [
+          {
+            "expr": "fivegs_upffunction_upf_sessionnbr{job=\"upf-urllc\"}",
+            "legendFormat": "URLLC Sessions",
+            "refId": "A"
+          }
+        ],
+        "options": {
+          "colorMode": "value",
+          "graphMode": "area"
+        }
+      },
+      {
+        "id": 5,
+        "title": "Throughput Comparison",
+        "type": "graph",
+        "gridPos": {"h": 8, "w": 12, "x": 12, "y": 8},
+        "targets": [
+          {
+            "expr": "fivegs_upffunction_upf_sessionnbr",
+            "legendFormat": "{{job}}",
+            "refId": "A"
+          }
+        ],
+        "yaxes": [
+          {"format": "Mbits", "label": "Throughput"},
+          {"format": "short"}
+        ]
+      },
+      {
+        "id": 6,
+        "title": "Packet Errors",
+        "type": "graph",
+        "gridPos": {"h": 6, "w": 12, "x": 0, "y": 12},
+        "targets": [
+          {
+            "expr": "fivegs_upffunction_upf_qosflows",
+            "legendFormat": "{{job}} - {{dnn}}",
+            "refId": "A"
+          }
+        ]
+      }
+    ],
+    "refresh": "5s",
+    "time": {"from": "now-15m", "to": "now"},
+    "timepicker": {"refresh_intervals": ["5s", "10s", "30s", "1m"]}
+  }
+}
