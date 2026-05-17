@@ -3,25 +3,28 @@ set -euo pipefail
 
 SLICE="${1:-}"
 DEV="${2:-ogstun}"
-EMBB_RATE="${EMBB_RATE:-8mbit}"
-EMBB_CEIL="${EMBB_CEIL:-10mbit}"
+EMBB_RATE="${EMBB_RATE:-2mbit}"
+EMBB_CEIL="${EMBB_CEIL:-6mbit}"
 EMBB_BURST="${EMBB_BURST:-128k}"
 EMBB_CBURST="${EMBB_CBURST:-128k}"
-EMBB_DELAY="${EMBB_DELAY:-8ms}"
-EMBB_JITTER="${EMBB_JITTER:-2ms}"
+EMBB_DELAY="${EMBB_DELAY:-6ms}"
+EMBB_JITTER="${EMBB_JITTER:-1ms}"
 EMBB_LOSS="${EMBB_LOSS:-0%}"
-EMBB_LIMIT="${EMBB_LIMIT:-1000}"
-EMBB_FQ_CODEL_LIMIT="${EMBB_FQ_CODEL_LIMIT:-2048}"
+EMBB_LIMIT="${EMBB_LIMIT:-256}"
+EMBB_FQ_CODEL_LIMIT="${EMBB_FQ_CODEL_LIMIT:-512}"
 EMBB_FQ_CODEL_TARGET="${EMBB_FQ_CODEL_TARGET:-5ms}"
 EMBB_FQ_CODEL_INTERVAL="${EMBB_FQ_CODEL_INTERVAL:-100ms}"
-URLLC_RATE="${URLLC_RATE:-2mbit}"
-URLLC_CEIL="${URLLC_CEIL:-4mbit}"
+URLLC_RATE="${URLLC_RATE:-3mbit}"
+URLLC_CEIL="${URLLC_CEIL:-7mbit}"
 URLLC_BURST="${URLLC_BURST:-32k}"
 URLLC_CBURST="${URLLC_CBURST:-32k}"
-URLLC_DELAY="${URLLC_DELAY:-2ms}"
-URLLC_JITTER="${URLLC_JITTER:-0.3ms}"
+URLLC_DELAY="${URLLC_DELAY:-1ms}"
+URLLC_JITTER="${URLLC_JITTER:-0.1ms}"
 URLLC_LOSS="${URLLC_LOSS:-0.01%}"
-URLLC_LIMIT="${URLLC_LIMIT:-20}"
+URLLC_LIMIT="${URLLC_LIMIT:-8}"
+URLLC_FQ_CODEL_LIMIT="${URLLC_FQ_CODEL_LIMIT:-32}"
+URLLC_FQ_CODEL_TARGET="${URLLC_FQ_CODEL_TARGET:-1ms}"
+URLLC_FQ_CODEL_INTERVAL="${URLLC_FQ_CODEL_INTERVAL:-5ms}"
 
 usage() {
     echo "Usage: $0 <embb|urllc> [device]" >&2
@@ -59,7 +62,8 @@ case "$SLICE" in
             delay "$URLLC_DELAY" "$URLLC_JITTER" distribution normal \
             loss "$URLLC_LOSS" limit "$URLLC_LIMIT"
         tc qdisc add dev "$DEV" parent 10:1 handle 20: fq_codel \
-            limit 64 target 1ms interval 10ms quantum 300 ecn
+            limit "$URLLC_FQ_CODEL_LIMIT" target "$URLLC_FQ_CODEL_TARGET" \
+            interval "$URLLC_FQ_CODEL_INTERVAL" quantum 300 ecn
         ;;
     *)
         usage

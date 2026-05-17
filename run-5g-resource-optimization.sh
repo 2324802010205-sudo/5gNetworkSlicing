@@ -12,7 +12,7 @@ IPERF_IMAGE="${IPERF_IMAGE:-networkstatic/iperf3:latest}"
 IPERF_SERVER="${IPERF_SERVER:-embb-iperf-server}"
 IPERF_SERVER_IP="${IPERF_SERVER_IP:-172.20.0.221}"
 IPERF_PORT="${IPERF_PORT:-5201}"
-EMBB_CEIL_MBPS="${EMBB_CEIL_MBPS:-10}"
+EMBB_CEIL_MBPS="${EMBB_CEIL_MBPS:-6}"
 URLLC_RTT_SLA_MS="${URLLC_RTT_SLA_MS:-10}"
 URLLC_JITTER_SLA_MS="${URLLC_JITTER_SLA_MS:-2}"
 REPORT_DIR="${REPORT_DIR:-reports}"
@@ -152,8 +152,8 @@ done
 
 echo "[1/6] Applying scaled resource profiles"
 bash ./fix-upf.sh >/dev/null 2>&1
-echo "      eMBB : 8 Mbps guaranteed, 10 Mbps ceiling"
-echo "      URLLC: 2 Mbps guaranteed, 4 Mbps ceiling, low queue"
+echo "      eMBB : 2 Mbps guaranteed, 6 Mbps ceiling"
+echo "      URLLC: 3 Mbps guaranteed, 7 Mbps ceiling, very short queue"
 
 EMBB_IP=$(ue_ip ue-embb)
 URLLC_IP=$(ue_ip ue-urllc)
@@ -252,8 +252,8 @@ This benchmark uses a scaled resource profile because the Open5GS userspace UPF 
 - eMBB generator: iperf3 reverse TCP, ${IPERF_SERVER_IP}:${IPERF_PORT}
 - eMBB parallel flows: $EMBB_PARALLEL
 - uRLLC latency target: $URLLC_TARGET
-- eMBB profile: 8 Mbps guaranteed, 10 Mbps ceiling
-- uRLLC profile: 2 Mbps guaranteed, 4 Mbps ceiling, fq_codel low queue
+- eMBB profile: 2 Mbps guaranteed, 6 Mbps ceiling
+- uRLLC profile: 3 Mbps guaranteed, 7 Mbps ceiling, fq_codel very short queue
 - uRLLC SLA target: avg RTT <= ${URLLC_RTT_SLA_MS} ms, jitter <= ${URLLC_JITTER_SLA_MS} ms
 
 ## Results
