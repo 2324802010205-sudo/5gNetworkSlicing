@@ -6,6 +6,7 @@ VIDEO_URL="${VIDEO_URL:-https://speed.cloudflare.com/__down?bytes=500000000}"
 PING_TARGET="${PING_TARGET:-1.1.1.1}"
 SOCKS_PORT="${SOCKS_PORT:-1080}"
 EMBB_LOG="${EMBB_LOG:-/tmp/embb-video-traffic.log}"
+CURL_TLS_OPT="${CURL_TLS_OPT:---insecure}"
 
 cleanup() {
     docker exec ue-embb pkill -f "curl -L --interface uesimtun0" >/dev/null 2>&1 || true
@@ -75,6 +76,7 @@ fi
 echo
 echo "[4/5] Starting eMBB video-like download and URLLC probe"
 echo "      eMBB URL : $VIDEO_URL"
+echo "      curl TLS option: $CURL_TLS_OPT"
 echo "      URLLC ping target: $PING_TARGET"
 echo "      Duration : ${DURATION}s"
 echo "      eMBB traffic log inside ue-embb: $EMBB_LOG"
@@ -86,7 +88,7 @@ docker exec ue-embb sh -lc "rm -f '$EMBB_LOG'; touch '$EMBB_LOG'"
 
 if docker exec ue-embb sh -lc "command -v curl >/dev/null 2>&1"; then
     docker exec -d ue-embb sh -lc \
-        "while true; do date >> '$EMBB_LOG'; curl -4 -L --interface uesimtun0 --connect-timeout 5 --max-time 30 --speed-time 10 --speed-limit 1024 -o /dev/null -w 'http_code=%{http_code} bytes=%{size_download} speed=%{speed_download}\n' '$VIDEO_URL' >> '$EMBB_LOG' 2>&1 || echo 'curl failed exit='$? >> '$EMBB_LOG'; sleep 1; done"
+        "while true; do date >> '$EMBB_LOG'; curl -4 $CURL_TLS_OPT -L --interface uesimtun0 --connect-timeout 5 --max-time 30 --speed-time 10 --speed-limit 1024 -o /dev/null -w 'http_code=%{http_code} bytes=%{size_download} speed=%{speed_download}\n' '$VIDEO_URL' >> '$EMBB_LOG' 2>&1 || echo \"curl failed exit=\$?\" >> '$EMBB_LOG'; sleep 1; done"
 elif docker exec ue-embb sh -lc "command -v wget >/dev/null 2>&1"; then
     docker exec -d ue-embb sh -lc \
         "while true; do date >> '$EMBB_LOG'; wget -4 -T 30 -O /dev/null '$VIDEO_URL' >> '$EMBB_LOG' 2>&1 || echo 'wget failed exit='$? >> '$EMBB_LOG'; sleep 1; done"
