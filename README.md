@@ -121,6 +121,48 @@ Default Grafana login: `admin` / `admin`
 
 Open5GS WebUI default from the image is commonly `admin` / `1423`.
 
+## Grafana Dashboard
+
+Start the metric pusher:
+
+```bash
+nohup bash scripts/push-metrics.sh > /tmp/push-metrics.log 2>&1 &
+```
+
+Restart Grafana after changing dashboard/provisioning files:
+
+```bash
+docker compose restart grafana
+```
+
+Open Grafana:
+
+```text
+http://localhost:3000
+```
+
+Go to `Dashboards` -> `5G Lab` -> `5G Network Slicing`.
+
+The dashboard uses these PromQL queries:
+
+```promql
+rate(upf_embb_rx_bytes_total{job="upf_embb"}[30s]) * 8 / 1000000
+rate(upf_embb_tx_bytes_total{job="upf_embb"}[30s]) * 8 / 1000000
+rate(upf_urllc_rx_bytes_total{job="upf_urllc"}[30s]) * 8 / 1000000
+rate(upf_urllc_tx_bytes_total{job="upf_urllc"}[30s]) * 8 / 1000000
+```
+
+Unit: Mbps.
+
+If old non-`_total` metrics are still shown in Prometheus, clear the Pushgateway jobs and restart the pusher:
+
+```bash
+curl -X DELETE http://localhost:9091/metrics/job/upf_embb
+curl -X DELETE http://localhost:9091/metrics/job/upf_urllc
+pkill -f scripts/push-metrics.sh
+nohup bash scripts/push-metrics.sh > /tmp/push-metrics.log 2>&1 &
+```
+
 ## Cleanup
 
 ```bash
