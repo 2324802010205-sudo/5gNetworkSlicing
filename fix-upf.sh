@@ -28,7 +28,9 @@ apply_urllc_qos() {
     docker exec upf-urllc tc class add dev ogstun parent 1: classid 1:10 htb \
       rate 20mbit ceil 25mbit burst 32k cburst 32k prio 0
     docker exec upf-urllc tc qdisc add dev ogstun parent 1:10 handle 10: netem \
-      delay 3ms 1ms distribution normal loss 0.01% limit 100
+      delay 2ms 0.3ms distribution normal loss 0.01% limit 20
+    docker exec upf-urllc tc qdisc add dev ogstun parent 10:1 handle 20: fq_codel \
+      limit 64 target 1ms interval 10ms quantum 300 ecn
   fi
 }
 

@@ -25,12 +25,15 @@ case "$SLICE" in
         ;;
     urllc)
         # URLLC trades peak throughput for low delay, low jitter, and smaller
-        # queues so latency does not grow too much under short bursts.
+        # queues so latency does not grow too much under short bursts. netem
+        # models radio delay; fq_codel keeps the remaining queue short.
         tc qdisc add dev "$DEV" root handle 1: htb default 10 r2q 1000
         tc class add dev "$DEV" parent 1: classid 1:10 htb \
             rate 20mbit ceil 25mbit burst 32k cburst 32k prio 0
         tc qdisc add dev "$DEV" parent 1:10 handle 10: netem \
-            delay 3ms 1ms distribution normal loss 0.01% limit 100
+            delay 2ms 0.3ms distribution normal loss 0.01% limit 20
+        tc qdisc add dev "$DEV" parent 10:1 handle 20: fq_codel \
+            limit 64 target 1ms interval 10ms quantum 300 ecn
         ;;
     *)
         usage

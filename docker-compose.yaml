@@ -420,3 +420,17 @@ services:
         limits:
           cpus: '0.3'
           memory: 128M
+
+  embb-iperf-server:
+    image: networkstatic/iperf3:latest
+    container_name: embb-iperf-server
+    command: ["-s", "-p", "5201"]
+    networks:
+      br-5gcore:
+        ipv4_address: 172.20.0.221
+    restart: unless-stopped
+    deploy:
+      resources:
+        limits:
+          cpus: '1.0'
+          memory: 256M

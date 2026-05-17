@@ -2,8 +2,12 @@
 set -euo pipefail
 
 DURATION="${DURATION:-60}"
+EMBB_MODE="${EMBB_MODE:-iperf3}"
 EMBB_URL="${EMBB_URL:-http://172.20.0.220:8080/embb.bin}"
 EMBB_PARALLEL="${EMBB_PARALLEL:-4}"
+IPERF_IMAGE="${IPERF_IMAGE:-networkstatic/iperf3:latest}"
+IPERF_SERVER_IP="${IPERF_SERVER_IP:-172.20.0.221}"
+IPERF_PORT="${IPERF_PORT:-5201}"
 URLLC_TARGET="${URLLC_TARGET:-10.46.0.1}"
 PING_COUNT="${PING_COUNT:-50}"
 PING_INTERVAL="${PING_INTERVAL:-0.1}"
@@ -12,10 +16,14 @@ RUN_ID="${RUN_ID:-$(date +%Y%m%d-%H%M%S)}"
 REPORT_FILE="$REPORT_DIR/5g-slicing-benchmark-$RUN_ID.md"
 CSV_FILE="$REPORT_DIR/5g-slicing-benchmark-$RUN_ID.csv"
 EMBB_LOG="/tmp/embb-benchmark-load.log"
+IPERF_CLIENT_NAME="embb-iperf-client-$RUN_ID"
+ACTIVE_EMBB_GENERATOR="http"
 
 cleanup() {
     docker exec ue-embb pkill -f "curl .*${EMBB_URL}" >/dev/null 2>&1 || true
     docker exec ue-embb pkill -f "wget .*${EMBB_URL}" >/dev/null 2>&1 || true
+    docker rm -f "$IPERF_CLIENT_NAME" >/dev/null 2>&1 || true
+    docker rm -f "${IPERF_CLIENT_NAME}-precheck" >/dev/null 2>&1 || true
 }
 trap cleanup EXIT
 
@@ -36,6 +44,22 @@ ensure_embb_traffic_source() {
         echo "Starting local eMBB traffic source..."
         docker compose up -d embb-traffic-source >/dev/null
     fi
+}
+
+ensure_embb_iperf_server() {
+    local state
+    [ "$EMBB_MODE" != "http" ] || return 1
+
+    state=$(docker inspect -f '{{.State.Status}}' embb-iperf-server 2>/dev/null || true)
+    if [ "$state" != "running" ]; then
+        echo "Starting local eMBB iperf3 server..."
+        if ! docker compose up -d embb-iperf-server >/dev/null 2>&1; then
+            echo "iperf3 server could not be started; falling back to HTTP load." >&2
+            return 1
+        fi
+    fi
+
+    docker inspect -f '{{.State.Status}}' embb-iperf-server 2>/dev/null | grep -q running
 }
 
 ue_ip() {
@@ -61,7 +85,15 @@ validate_embb_datapath() {
     docker exec ue-embb sh -lc "rm -f '$EMBB_LOG'; touch '$EMBB_LOG'"
     read -r rx1 tx1 < <(byte_counter upf-embb)
 
-    if docker exec ue-embb sh -lc "command -v curl >/dev/null 2>&1"; then
+    if [ "$ACTIVE_EMBB_GENERATOR" = "iperf3" ]; then
+        docker rm -f "${IPERF_CLIENT_NAME}-precheck" >/dev/null 2>&1 || true
+        docker run --rm \
+            --name "${IPERF_CLIENT_NAME}-precheck" \
+            --network container:ue-embb \
+            "$IPERF_IMAGE" \
+            -c "$IPERF_SERVER_IP" -p "$IPERF_PORT" -R \
+            -P 1 -t 3 -B "$EMBB_IP" >> "$EMBB_LOG" 2>&1 || true
+    elif docker exec ue-embb sh -lc "command -v curl >/dev/null 2>&1"; then
         docker exec ue-embb sh -lc \
             "curl -4 -L --interface uesimtun0 --connect-timeout 5 --max-time 5 -o /dev/null '$EMBB_URL' >> '$EMBB_LOG' 2>&1 || true"
     elif docker exec ue-embb sh -lc "command -v wget >/dev/null 2>&1"; then
@@ -77,8 +109,12 @@ validate_embb_datapath() {
     if [ "$delta" -le 0 ]; then
         echo "eMBB datapath validation failed: upf-embb ogstun TX did not increase." >&2
         echo "This means traffic is not traversing the eMBB UPF/GTP tunnel or the source is unreachable." >&2
-        echo "Last ue-embb traffic log lines:" >&2
-        docker exec ue-embb sh -lc "tail -n 12 '$EMBB_LOG' 2>/dev/null || true" >&2
+        echo "Last eMBB traffic log lines:" >&2
+        if [ "$ACTIVE_EMBB_GENERATOR" = "iperf3" ]; then
+            (tail -n 12 "$EMBB_LOG" 2>/dev/null || true) >&2
+        else
+            docker exec ue-embb sh -lc "tail -n 12 '$EMBB_LOG' 2>/dev/null || true" >&2
+        fi
         exit 1
     fi
 
@@ -118,6 +154,19 @@ ping_urllc() {
 
 start_embb_load() {
     docker exec ue-embb sh -lc "rm -f '$EMBB_LOG'; touch '$EMBB_LOG'"
+
+    if [ "$ACTIVE_EMBB_GENERATOR" = "iperf3" ]; then
+        docker rm -f "$IPERF_CLIENT_NAME" >/dev/null 2>&1 || true
+        docker run -d --rm \
+            --name "$IPERF_CLIENT_NAME" \
+            --network container:ue-embb \
+            "$IPERF_IMAGE" \
+            -c "$IPERF_SERVER_IP" -p "$IPERF_PORT" -R \
+            -P "$EMBB_PARALLEL" -t "$((DURATION + 5))" -B "$EMBB_IP" \
+            >/dev/null
+        return
+    fi
+
     if docker exec ue-embb sh -lc "command -v curl >/dev/null 2>&1"; then
         for _ in $(seq 1 "$EMBB_PARALLEL"); do
             docker exec -d ue-embb sh -lc \
@@ -152,10 +201,21 @@ echo "  5G slicing benchmark: throughput, latency, jitter, isolation"
 echo "============================================================"
 echo
 
-ensure_embb_traffic_source
-for c in upf-embb upf-urllc ue-embb ue-urllc embb-traffic-source; do
+if ensure_embb_iperf_server; then
+    ACTIVE_EMBB_GENERATOR="iperf3"
+else
+    ensure_embb_traffic_source
+    ACTIVE_EMBB_GENERATOR="http"
+fi
+
+for c in upf-embb upf-urllc ue-embb ue-urllc; do
     need_container "$c"
 done
+if [ "$ACTIVE_EMBB_GENERATOR" = "iperf3" ]; then
+    need_container embb-iperf-server
+else
+    need_container embb-traffic-source
+fi
 
 echo "[1/6] Applying QoS profiles"
 bash ./fix-upf.sh >/dev/null 2>&1
@@ -173,12 +233,20 @@ echo
 echo "[2/6] Preflight"
 echo "      eMBB UE : $EMBB_IP"
 echo "      URLLC UE: $URLLC_IP"
-echo "      eMBB source: $EMBB_URL"
+if [ "$ACTIVE_EMBB_GENERATOR" = "iperf3" ]; then
+    echo "      eMBB source: iperf3 reverse TCP at ${IPERF_SERVER_IP}:${IPERF_PORT}"
+else
+    echo "      eMBB source: $EMBB_URL"
+fi
 echo "      URLLC target: $URLLC_TARGET"
 echo "      eMBB parallel flows: $EMBB_PARALLEL"
 echo
 echo "      eMBB route to traffic source with forced tunnel:"
-docker exec ue-embb ip route get "$(echo "$EMBB_URL" | awk -F[/:] '{print $4}')" oif uesimtun0 from "$EMBB_IP" 2>/dev/null || true
+if [ "$ACTIVE_EMBB_GENERATOR" = "iperf3" ]; then
+    docker exec ue-embb ip route get "$IPERF_SERVER_IP" oif uesimtun0 from "$EMBB_IP" 2>/dev/null || true
+else
+    docker exec ue-embb ip route get "$(echo "$EMBB_URL" | awk -F[/:] '{print $4}')" oif uesimtun0 from "$EMBB_IP" 2>/dev/null || true
+fi
 
 echo
 echo "      Validating eMBB data path through upf-embb/ogstun..."
@@ -227,7 +295,9 @@ Run ID: $RUN_ID
 
 - eMBB UE IP: $EMBB_IP
 - URLLC UE IP: $URLLC_IP
-- eMBB traffic source: $EMBB_URL
+- eMBB load generator: $ACTIVE_EMBB_GENERATOR
+- eMBB HTTP traffic source: $EMBB_URL
+- eMBB iperf3 server: ${IPERF_SERVER_IP}:${IPERF_PORT}
 - URLLC latency target: $URLLC_TARGET
 - eMBB parallel flows: $EMBB_PARALLEL
 - eMBB measurement duration: ${DURATION}s

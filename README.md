@@ -162,11 +162,21 @@ Useful options:
 
 ```bash
 DURATION=90 EMBB_PARALLEL=6 bash ./run-5g-slicing-benchmark.sh
+EMBB_MODE=iperf3 DURATION=90 EMBB_PARALLEL=8 bash ./run-5g-slicing-benchmark.sh
+EMBB_MODE=http DURATION=90 EMBB_PARALLEL=6 bash ./run-5g-slicing-benchmark.sh
 URLLC_TARGET=10.46.0.1 bash ./run-5g-slicing-benchmark.sh
 URLLC_TARGET=1.1.1.1 bash ./run-5g-slicing-benchmark.sh
 ```
 
 For NCKH/reporting, prefer `URLLC_TARGET=10.46.0.1` to measure the slice-local path. Use Internet targets only as an additional end-to-end scenario.
+
+The benchmark uses `iperf3` reverse TCP by default for eMBB throughput. This avoids the common false bottleneck from the Python HTTP traffic source. The HTTP source is still kept for video-like demo traffic and can be selected with `EMBB_MODE=http`.
+
+For the report, interpret low eMBB throughput as follows:
+
+- If HTTP is low but `iperf3` is near 100-150 Mbps, the bottleneck is the HTTP demo server/client path, not HTB.
+- If both HTTP and `iperf3` stay low, the likely bottleneck is VM CPU scheduling, virtual NIC throughput, or Open5GS userspace GTP-U forwarding.
+- If uRLLC jitter rises under eMBB load, check `docker exec upf-urllc tc qdisc show dev ogstun`; the expected uRLLC profile is `htb -> netem -> fq_codel`.
 
 ## Web UI
 
