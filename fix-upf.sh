@@ -13,9 +13,11 @@ apply_embb_qos() {
     docker exec upf-embb tc qdisc del dev ogstun root 2>/dev/null || true
     docker exec upf-embb tc qdisc add dev ogstun root handle 1: htb default 10 r2q 1000
     docker exec upf-embb tc class add dev ogstun parent 1: classid 1:10 htb \
-      rate 16mbit ceil 20mbit burst 128k cburst 128k prio 2
+      rate 12mbit ceil 15mbit burst 128k cburst 128k prio 2
     docker exec upf-embb tc qdisc add dev ogstun parent 1:10 handle 10: netem \
       delay 8ms 2ms distribution normal loss 0% limit 1000
+    docker exec upf-embb tc qdisc add dev ogstun parent 10:1 handle 20: fq_codel \
+      limit 2048 target 5ms interval 100ms quantum 1514 ecn
   fi
 }
 
@@ -26,7 +28,7 @@ apply_urllc_qos() {
     docker exec upf-urllc tc qdisc del dev ogstun root 2>/dev/null || true
     docker exec upf-urllc tc qdisc add dev ogstun root handle 1: htb default 10 r2q 1000
     docker exec upf-urllc tc class add dev ogstun parent 1: classid 1:10 htb \
-      rate 20mbit ceil 25mbit burst 32k cburst 32k prio 0
+      rate 4mbit ceil 8mbit burst 32k cburst 32k prio 0
     docker exec upf-urllc tc qdisc add dev ogstun parent 1:10 handle 10: netem \
       delay 2ms 0.3ms distribution normal loss 0.01% limit 20
     docker exec upf-urllc tc qdisc add dev ogstun parent 10:1 handle 20: fq_codel \
@@ -38,6 +40,7 @@ echo ""
 echo "[1/7] Fixing IP - UPF-eMBB (10.45.0.1/16)..."
 docker exec upf-embb ip addr del 10.45.0.1/16 dev ogstun 2>/dev/null || true
 docker exec upf-embb ip addr add 10.45.0.1/16 dev ogstun
+docker exec upf-embb ip link set ogstun txqueuelen 10000
 echo "      OK"
 
 echo "[2/7] Fixing NAT - UPF-eMBB..."
@@ -46,7 +49,7 @@ docker exec upf-embb iptables -t nat -A POSTROUTING \
   -s 10.45.0.0/16 ! -o ogstun -j MASQUERADE
 echo "      OK"
 
-echo "[3/7] Fixing QoS - UPF-eMBB (scaled lab profile: 16Mbps rate, 20Mbps ceiling)..."
+echo "[3/7] Fixing QoS - UPF-eMBB (downlink-safe scaled profile: 12Mbps rate, 15Mbps ceiling)..."
 apply_embb_qos
 echo "      OK"
 
@@ -55,6 +58,7 @@ echo "[4/7] Fixing IP - UPF-uRLLC (10.46.0.1/16)..."
 docker exec upf-urllc ip addr del 10.46.0.1/16 dev ogstun 2>/dev/null || true
 docker exec upf-urllc ip addr del 10.45.0.1/16 dev ogstun 2>/dev/null || true
 docker exec upf-urllc ip addr add 10.46.0.1/16 dev ogstun
+docker exec upf-urllc ip link set ogstun txqueuelen 1000
 echo "      OK"
 
 echo "[5/7] Fixing NAT - UPF-uRLLC..."
@@ -88,9 +92,9 @@ docker exec upf-urllc ip addr show ogstun | awk '/inet / {print $2}'
 echo ""
 echo "--- TC Rules ---"
 echo -n "UPF-eMBB  : "
-docker exec upf-embb tc qdisc show dev ogstun | grep -E "htb|netem" || echo "NOT FOUND"
+docker exec upf-embb tc qdisc show dev ogstun | grep -E "htb|netem|fq_codel" || echo "NOT FOUND"
 echo -n "UPF-uRLLC : "
-docker exec upf-urllc tc qdisc show dev ogstun | grep -E "htb|netem" || echo "NOT FOUND"
+docker exec upf-urllc tc qdisc show dev ogstun | grep -E "htb|netem|fq_codel" || echo "NOT FOUND"
 
 echo ""
 echo "--- UE Tunnel IP ---"

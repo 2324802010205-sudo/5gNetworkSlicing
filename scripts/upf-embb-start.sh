@@ -13,6 +13,7 @@ sysctl -w net.ipv6.conf.all.disable_ipv6=0
 ip addr del "$IPV6_TUN_ADDR" dev ogstun 2>/dev/null || true
 ip addr add "$IPV6_TUN_ADDR" dev ogstun
 ip link set ogstun up
+ip link set ogstun txqueuelen "${OGSTUN_TXQUEUELEN:-10000}"
 
 echo 1 > /proc/sys/net/ipv4/ip_forward
 if [ "$ENABLE_NAT" = true ]; then

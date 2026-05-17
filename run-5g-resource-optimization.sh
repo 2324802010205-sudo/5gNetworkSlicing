@@ -134,7 +134,7 @@ done
 
 echo "[1/6] Applying scaled resource profiles"
 bash ./fix-upf.sh >/dev/null 2>&1
-echo "      eMBB : 16 Mbps guaranteed, 20 Mbps ceiling"
+echo "      eMBB : 12 Mbps guaranteed, 15 Mbps ceiling"
 echo "      URLLC: 4 Mbps guaranteed, 8 Mbps ceiling, low queue"
 
 EMBB_IP=$(ue_ip ue-embb)
@@ -229,7 +229,7 @@ This benchmark uses a scaled resource profile because the Open5GS userspace UPF 
 - eMBB generator: iperf3 reverse TCP, ${IPERF_SERVER_IP}:${IPERF_PORT}
 - eMBB parallel flows: $EMBB_PARALLEL
 - uRLLC latency target: $URLLC_TARGET
-- eMBB profile: 16 Mbps guaranteed, 20 Mbps ceiling
+- eMBB profile: 12 Mbps guaranteed, 15 Mbps ceiling
 - uRLLC profile: 4 Mbps guaranteed, 8 Mbps ceiling, fq_codel low queue
 
 ## Results

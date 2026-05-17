@@ -3,14 +3,17 @@ set -euo pipefail
 
 SLICE="${1:-}"
 DEV="${2:-ogstun}"
-EMBB_RATE="${EMBB_RATE:-16mbit}"
-EMBB_CEIL="${EMBB_CEIL:-20mbit}"
+EMBB_RATE="${EMBB_RATE:-12mbit}"
+EMBB_CEIL="${EMBB_CEIL:-15mbit}"
 EMBB_BURST="${EMBB_BURST:-128k}"
 EMBB_CBURST="${EMBB_CBURST:-128k}"
 EMBB_DELAY="${EMBB_DELAY:-8ms}"
 EMBB_JITTER="${EMBB_JITTER:-2ms}"
 EMBB_LOSS="${EMBB_LOSS:-0%}"
 EMBB_LIMIT="${EMBB_LIMIT:-1000}"
+EMBB_FQ_CODEL_LIMIT="${EMBB_FQ_CODEL_LIMIT:-2048}"
+EMBB_FQ_CODEL_TARGET="${EMBB_FQ_CODEL_TARGET:-5ms}"
+EMBB_FQ_CODEL_INTERVAL="${EMBB_FQ_CODEL_INTERVAL:-100ms}"
 URLLC_RATE="${URLLC_RATE:-4mbit}"
 URLLC_CEIL="${URLLC_CEIL:-8mbit}"
 URLLC_BURST="${URLLC_BURST:-32k}"
@@ -40,6 +43,9 @@ case "$SLICE" in
         tc qdisc add dev "$DEV" parent 1:10 handle 10: netem \
             delay "$EMBB_DELAY" "$EMBB_JITTER" distribution normal \
             loss "$EMBB_LOSS" limit "$EMBB_LIMIT"
+        tc qdisc add dev "$DEV" parent 10:1 handle 20: fq_codel \
+            limit "$EMBB_FQ_CODEL_LIMIT" target "$EMBB_FQ_CODEL_TARGET" \
+            interval "$EMBB_FQ_CODEL_INTERVAL" quantum 1514 ecn
         ;;
     urllc)
         # URLLC trades peak throughput for low delay, low jitter, and smaller

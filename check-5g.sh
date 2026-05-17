@@ -42,7 +42,7 @@ check_ping() {
 
 check_qos() {
   local upf="$1"
-  if docker exec "$upf" tc qdisc show dev ogstun 2>/dev/null | grep -Eq 'htb|tbf|netem'; then
+  if docker exec "$upf" tc qdisc show dev ogstun 2>/dev/null | grep -Eq 'htb|tbf|netem|fq_codel'; then
     pass "$upf QoS qdisc is configured"
   else
     warn "$upf QoS qdisc not found"

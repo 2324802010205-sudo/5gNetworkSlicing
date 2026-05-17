@@ -46,7 +46,7 @@ function Check-Ping($Name) {
 
 function Check-Qos($Name) {
     $qdisc = docker exec $Name tc qdisc show dev ogstun 2>$null
-    if ($LASTEXITCODE -eq 0 -and ($qdisc -match "htb|tbf|netem")) {
+    if ($LASTEXITCODE -eq 0 -and ($qdisc -match "htb|tbf|netem|fq_codel")) {
         Pass "$Name QoS qdisc is configured"
     } else {
         Warn "$Name QoS qdisc not found"
