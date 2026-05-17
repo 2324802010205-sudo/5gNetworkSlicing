@@ -11,7 +11,7 @@ apply_embb_qos() {
     docker exec upf-embb /bin/bash /scripts/apply-slice-qos.sh embb ogstun >/dev/null
   else
     docker exec upf-embb tc qdisc del dev ogstun root 2>/dev/null || true
-    docker exec upf-embb tc qdisc add dev ogstun root handle 1: htb default 10
+    docker exec upf-embb tc qdisc add dev ogstun root handle 1: htb default 10 r2q 1000
     docker exec upf-embb tc class add dev ogstun parent 1: classid 1:10 htb \
       rate 150mbit ceil 180mbit burst 256k cburst 256k prio 2
     docker exec upf-embb tc qdisc add dev ogstun parent 1:10 handle 10: netem \
@@ -24,7 +24,7 @@ apply_urllc_qos() {
     docker exec upf-urllc /bin/bash /scripts/apply-slice-qos.sh urllc ogstun >/dev/null
   else
     docker exec upf-urllc tc qdisc del dev ogstun root 2>/dev/null || true
-    docker exec upf-urllc tc qdisc add dev ogstun root handle 1: htb default 10
+    docker exec upf-urllc tc qdisc add dev ogstun root handle 1: htb default 10 r2q 1000
     docker exec upf-urllc tc class add dev ogstun parent 1: classid 1:10 htb \
       rate 20mbit ceil 25mbit burst 32k cburst 32k prio 0
     docker exec upf-urllc tc qdisc add dev ogstun parent 1:10 handle 10: netem \

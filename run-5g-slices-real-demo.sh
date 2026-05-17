@@ -2,11 +2,10 @@
 set -euo pipefail
 
 DURATION="${DURATION:-120}"
-VIDEO_URL="${VIDEO_URL:-https://speed.cloudflare.com/__down?bytes=500000000}"
-PING_TARGET="${PING_TARGET:-1.1.1.1}"
-SOCKS_PORT="${SOCKS_PORT:-1080}"
+VIDEO_URL="${VIDEO_URL:-http://172.20.0.220:8080/embb.bin}"
+PING_TARGET="${PING_TARGET:-10.46.0.1}"
 EMBB_LOG="${EMBB_LOG:-/tmp/embb-video-traffic.log}"
-CURL_TLS_OPT="${CURL_TLS_OPT:---insecure}"
+CURL_TLS_OPT="${CURL_TLS_OPT:-}"
 
 cleanup() {
     docker exec ue-embb pkill -f "curl -L --interface uesimtun0" >/dev/null 2>&1 || true
@@ -21,6 +20,15 @@ need_container() {
     if [ "$state" != "running" ]; then
         echo "Container $name is not running. Start the lab with: docker compose up -d" >&2
         exit 1
+    fi
+}
+
+ensure_embb_traffic_source() {
+    local state
+    state=$(docker inspect -f '{{.State.Status}}' embb-traffic-source 2>/dev/null || true)
+    if [ "$state" != "running" ]; then
+        echo "Starting local eMBB traffic source..."
+        docker compose up -d embb-traffic-source >/dev/null
     fi
 }
 
@@ -41,12 +49,14 @@ echo "  5G slicing real demo: eMBB video/web + URLLC latency"
 echo "============================================================"
 echo
 
-for c in upf-embb upf-urllc ue-embb ue-urllc; do
+ensure_embb_traffic_source
+
+for c in upf-embb upf-urllc ue-embb ue-urllc embb-traffic-source; do
     need_container "$c"
 done
 
 echo "[1/5] Applying slice resource profiles"
-bash ./fix-upf.sh >/dev/null
+bash ./fix-upf.sh >/dev/null 2>&1
 echo "      eMBB : 150 Mbps rate, 180 Mbps burst ceiling, about 18 ms radio delay"
 echo "      URLLC: 20 Mbps rate, 25 Mbps ceiling, about 3 ms low-jitter delay"
 
@@ -64,20 +74,19 @@ echo "      eMBB  uesimtun0: $EMBB_IP"
 echo "      URLLC uesimtun0: $URLLC_IP"
 
 echo
-echo "[3/5] Optional eMBB SOCKS5 proxy for browser/YouTube"
-if docker exec ue-embb sh -lc "command -v microsocks >/dev/null 2>&1"; then
-    docker exec -d ue-embb sh -lc "pkill microsocks >/dev/null 2>&1 || true; microsocks -i 0.0.0.0 -p $SOCKS_PORT"
-    echo "      SOCKS5 proxy inside ue-embb: $EMBB_IP:$SOCKS_PORT"
-    echo "      Use it for YouTube if your host can reach the UE tunnel address."
-else
-    echo "      microsocks is not installed in ue-embb; continuing with curl video-like traffic."
-fi
+echo "[3/5] Browser/YouTube path"
+echo "      Not used for this measurement run."
+echo "      For a real browser demo, run: bash ./start-5g-youtube.sh"
 
 echo
 echo "[4/5] Starting eMBB video-like download and URLLC probe"
 echo "      eMBB URL : $VIDEO_URL"
-echo "      curl TLS option: $CURL_TLS_OPT"
+echo "      eMBB source: local Docker HTTP server, no Cloudflare/Internet dependency"
+if [ -n "$CURL_TLS_OPT" ]; then
+    echo "      curl TLS option: $CURL_TLS_OPT"
+fi
 echo "      URLLC ping target: $PING_TARGET"
+echo "      URLLC mode: slice-local RTT by default; use PING_TARGET=1.1.1.1 for Internet RTT"
 echo "      Duration : ${DURATION}s"
 echo "      eMBB traffic log inside ue-embb: $EMBB_LOG"
 echo
@@ -91,7 +100,7 @@ if docker exec ue-embb sh -lc "command -v curl >/dev/null 2>&1"; then
         "while true; do date >> '$EMBB_LOG'; curl -4 $CURL_TLS_OPT -L --interface uesimtun0 --connect-timeout 5 --max-time 30 --speed-time 10 --speed-limit 1024 -o /dev/null -w 'http_code=%{http_code} bytes=%{size_download} speed=%{speed_download}\n' '$VIDEO_URL' >> '$EMBB_LOG' 2>&1 || echo \"curl failed exit=\$?\" >> '$EMBB_LOG'; sleep 1; done"
 elif docker exec ue-embb sh -lc "command -v wget >/dev/null 2>&1"; then
     docker exec -d ue-embb sh -lc \
-        "while true; do date >> '$EMBB_LOG'; wget -4 -T 30 -O /dev/null '$VIDEO_URL' >> '$EMBB_LOG' 2>&1 || echo 'wget failed exit='$? >> '$EMBB_LOG'; sleep 1; done"
+        "while true; do date >> '$EMBB_LOG'; wget -4 -T 30 -O /dev/null '$VIDEO_URL' >> '$EMBB_LOG' 2>&1 || echo \"wget failed exit=\$?\" >> '$EMBB_LOG'; sleep 1; done"
 else
     echo "ue-embb has no curl/wget, so eMBB traffic generation cannot start." >&2
     echo "Install curl in the UE image or use the browser SOCKS5 path from start-5g-youtube.sh." >&2

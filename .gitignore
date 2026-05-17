@@ -1,4 +1,5 @@
 grafana_data/
 prometheus_data/
 mongodb_data/
+reports/
 *.pcap

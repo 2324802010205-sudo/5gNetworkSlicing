@@ -11,6 +11,18 @@ echo "[1/7] Fixing UPF IP/NAT/QoS..."
 bash ./fix-upf.sh >/dev/null 2>&1
 echo "      OK"
 
+echo "[1b/7] Checking microsocks on host..."
+if ! command -v microsocks >/dev/null 2>&1; then
+  if command -v apt-get >/dev/null 2>&1; then
+    sudo apt-get update -qq
+    sudo apt-get install -y microsocks
+  else
+    echo "      FAIL - microsocks is not installed and apt-get is unavailable"
+    exit 1
+  fi
+fi
+echo "      OK - $(command -v microsocks)"
+
 echo "[2/7] Getting UE namespace PID..."
 UE_PID=$(docker inspect --format '{{.State.Pid}}' ue-embb)
 echo "      UE PID: $UE_PID"

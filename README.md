@@ -18,7 +18,7 @@ Open5GS + UERANSIM + Docker Compose lab for two slices:
 docker compose up -d
 ```
 
-The main compose file starts the 5G core, two UPFs, gNB, two UEs, Prometheus, Grafana, Pushgateway, Node Exporter and cAdvisor.
+The main compose file starts the 5G core, two UPFs, gNB, two UEs, Prometheus, Grafana, Pushgateway, Node Exporter, cAdvisor and a local eMBB HTTP traffic source.
 
 ## Fix UPF NAT/QoS
 
@@ -118,7 +118,7 @@ bash ./measure-embb.sh
 
 ## Run A Realistic Slice Demo
 
-This demo drives the eMBB slice with video-like HTTPS download traffic while the uRLLC slice continuously measures latency, jitter and loss:
+This demo drives the eMBB slice with local video-like HTTP download traffic while the uRLLC slice continuously measures latency, jitter and loss:
 
 ```bash
 bash ./run-5g-slices-real-demo.sh
@@ -128,14 +128,45 @@ Useful options:
 
 ```bash
 DURATION=300 bash ./run-5g-slices-real-demo.sh
-VIDEO_URL=https://speed.cloudflare.com/__down?bytes=1000000000 bash ./run-5g-slices-real-demo.sh
+VIDEO_URL=http://172.20.0.220:8080/embb.bin bash ./run-5g-slices-real-demo.sh
 PING_TARGET=8.8.8.8 bash ./run-5g-slices-real-demo.sh
 ```
 
 Expected behavior:
 
 - eMBB should show much higher throughput and tolerate more delay because it represents mobile broadband/YouTube-like traffic.
-- uRLLC should show low RTT, low jitter and little/no loss, but it is intentionally capped at a lower throughput.
+- uRLLC defaults to `PING_TARGET=10.46.0.1`, the uRLLC UPF gateway, so the RTT reflects the slice path in the lab instead of public Internet latency.
+- Use `PING_TARGET=1.1.1.1` only when you intentionally want to measure end-to-end Internet RTT through the slice.
+
+The default eMBB source is `embb-traffic-source` at `172.20.0.220:8080`. This avoids public CDN blocking, TLS certificate issues and Internet variability while still sending downlink traffic through the eMBB UPF.
+
+For a real browser/YouTube demo, run:
+
+```bash
+bash ./start-5g-youtube.sh
+```
+
+Then configure Firefox to use the SOCKS5 proxy printed by the script.
+
+## Run The Research Benchmark
+
+Use this benchmark when you need report-ready numbers for resource optimization and slice isolation:
+
+```bash
+bash ./run-5g-slicing-benchmark.sh
+```
+
+It validates the eMBB tunnel path, saturates eMBB with local HTTP traffic, then compares uRLLC latency/jitter/loss before and during eMBB saturation. Reports are written to `reports/` as Markdown and CSV.
+
+Useful options:
+
+```bash
+DURATION=90 EMBB_PARALLEL=6 bash ./run-5g-slicing-benchmark.sh
+URLLC_TARGET=10.46.0.1 bash ./run-5g-slicing-benchmark.sh
+URLLC_TARGET=1.1.1.1 bash ./run-5g-slicing-benchmark.sh
+```
+
+For NCKH/reporting, prefer `URLLC_TARGET=10.46.0.1` to measure the slice-local path. Use Internet targets only as an additional end-to-end scenario.
 
 ## Web UI
 
