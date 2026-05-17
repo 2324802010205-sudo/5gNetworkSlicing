@@ -13,9 +13,9 @@ apply_embb_qos() {
     docker exec upf-embb tc qdisc del dev ogstun root 2>/dev/null || true
     docker exec upf-embb tc qdisc add dev ogstun root handle 1: htb default 10 r2q 1000
     docker exec upf-embb tc class add dev ogstun parent 1: classid 1:10 htb \
-      rate 150mbit ceil 180mbit burst 256k cburst 256k prio 2
+      rate 16mbit ceil 20mbit burst 128k cburst 128k prio 2
     docker exec upf-embb tc qdisc add dev ogstun parent 1:10 handle 10: netem \
-      delay 18ms 6ms distribution normal loss 0.05% limit 2000
+      delay 8ms 2ms distribution normal loss 0% limit 1000
   fi
 }
 
@@ -46,7 +46,7 @@ docker exec upf-embb iptables -t nat -A POSTROUTING \
   -s 10.45.0.0/16 ! -o ogstun -j MASQUERADE
 echo "      OK"
 
-echo "[3/7] Fixing QoS - UPF-eMBB (150Mbps, mobile broadband delay)..."
+echo "[3/7] Fixing QoS - UPF-eMBB (scaled lab profile: 16Mbps rate, 20Mbps ceiling)..."
 apply_embb_qos
 echo "      OK"
 
@@ -63,7 +63,7 @@ docker exec upf-urllc iptables -t nat -A POSTROUTING \
   -s 10.46.0.0/16 ! -o ogstun -j MASQUERADE
 echo "      OK"
 
-echo "[6/7] Fixing QoS - UPF-uRLLC (20Mbps, low latency/low jitter)..."
+echo "[6/7] Fixing QoS - UPF-uRLLC (scaled lab profile: 4Mbps rate, 8Mbps ceiling, low jitter)..."
 apply_urllc_qos
 echo "      OK"
 

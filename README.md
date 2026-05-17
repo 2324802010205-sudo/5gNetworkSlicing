@@ -18,7 +18,7 @@ Open5GS + UERANSIM + Docker Compose lab for two slices:
 docker compose up -d
 ```
 
-The main compose file starts the 5G core, two UPFs, gNB, two UEs, Prometheus, Grafana, Pushgateway, Node Exporter, cAdvisor and a local eMBB HTTP traffic source.
+The main compose file starts the 5G core, two UPFs, gNB, two UEs, Prometheus, Grafana, Pushgateway, Node Exporter, cAdvisor, and an iperf3 server for report-grade traffic generation.
 
 ## Fix UPF NAT/QoS
 
@@ -33,10 +33,10 @@ The script keeps UPF gateway IPs aligned with `config/smf.yaml`:
 - `upf-embb`: `10.45.0.1/16`
 - `upf-urllc`: `10.46.0.1/16`
 
-It also applies the optimized slice resource profiles:
+It also applies scaled slice resource profiles. The scale is intentional: this VM-based Open5GS UPF has a much lower data-plane ceiling than a hardware-accelerated 5G UPF, so the benchmark evaluates resource isolation and SLA behavior at the capacity the lab can actually forward.
 
-- eMBB: 150 Mbps committed rate, 180 Mbps burst ceiling, radio-like delay/jitter for video and web traffic.
-- uRLLC: 20 Mbps committed rate, 25 Mbps ceiling, very low delay/jitter and a short queue for latency-sensitive probes.
+- eMBB: 16 Mbps guaranteed rate, 20 Mbps ceiling, broadband-oriented queue.
+- uRLLC: 4 Mbps guaranteed rate, 8 Mbps ceiling, low delay/jitter and `fq_codel` short queue.
 
 ## Check If The Lab Is OK
 
@@ -109,73 +109,37 @@ Check who uses the port:
 sudo ss -ltnp | grep ':8080'
 ```
 
-## Measure Slices
+## Run The Resource Optimization Benchmark
+
+Use this benchmark for report-ready numbers. It tests the topic of the project directly: per-slice resource allocation, uRLLC SLA protection, and stability under eMBB load.
 
 ```bash
-bash ./measure-urllc.sh
-bash ./measure-embb.sh
-```
-
-## Run A Realistic Slice Demo
-
-This demo drives the eMBB slice with local video-like HTTP download traffic while the uRLLC slice continuously measures latency, jitter and loss:
-
-```bash
-bash ./run-5g-slices-real-demo.sh
+bash ./run-5g-resource-optimization.sh
 ```
 
 Useful options:
 
 ```bash
-DURATION=300 bash ./run-5g-slices-real-demo.sh
-VIDEO_URL=http://172.20.0.220:8080/embb.bin bash ./run-5g-slices-real-demo.sh
-PING_TARGET=8.8.8.8 bash ./run-5g-slices-real-demo.sh
-```
-
-Expected behavior:
-
-- eMBB should show much higher throughput and tolerate more delay because it represents mobile broadband/YouTube-like traffic.
-- uRLLC defaults to `PING_TARGET=10.46.0.1`, the uRLLC UPF gateway, so the RTT reflects the slice path in the lab instead of public Internet latency.
-- Use `PING_TARGET=1.1.1.1` only when you intentionally want to measure end-to-end Internet RTT through the slice.
-
-The default eMBB source is `embb-traffic-source` at `172.20.0.220:8080`. This avoids public CDN blocking, TLS certificate issues and Internet variability while still sending downlink traffic through the eMBB UPF.
-
-For a real browser/YouTube demo, run:
-
-```bash
-bash ./start-5g-youtube.sh
-```
-
-Then configure Firefox to use the SOCKS5 proxy printed by the script.
-
-## Run The Research Benchmark
-
-Use this benchmark when you need report-ready numbers for resource optimization and slice isolation:
-
-```bash
-bash ./run-5g-slicing-benchmark.sh
-```
-
-It validates the eMBB tunnel path, saturates eMBB with local HTTP traffic, then compares uRLLC latency/jitter/loss before and during eMBB saturation. Reports are written to `reports/` as Markdown and CSV.
-
-Useful options:
-
-```bash
-DURATION=90 EMBB_PARALLEL=6 bash ./run-5g-slicing-benchmark.sh
-EMBB_MODE=iperf3 DURATION=90 EMBB_PARALLEL=8 bash ./run-5g-slicing-benchmark.sh
-EMBB_MODE=http DURATION=90 EMBB_PARALLEL=6 bash ./run-5g-slicing-benchmark.sh
-URLLC_TARGET=10.46.0.1 bash ./run-5g-slicing-benchmark.sh
-URLLC_TARGET=1.1.1.1 bash ./run-5g-slicing-benchmark.sh
+DURATION=90 STABILITY_DURATION=300 EMBB_PARALLEL=4 bash ./run-5g-resource-optimization.sh
+URLLC_TARGET=10.46.0.1 bash ./run-5g-resource-optimization.sh
+URLLC_TARGET=1.1.1.1 bash ./run-5g-resource-optimization.sh
 ```
 
 For NCKH/reporting, prefer `URLLC_TARGET=10.46.0.1` to measure the slice-local path. Use Internet targets only as an additional end-to-end scenario.
 
-The benchmark uses `iperf3` reverse TCP by default for eMBB throughput. This avoids the common false bottleneck from the Python HTTP traffic source. The HTTP source is still kept for video-like demo traffic and can be selected with `EMBB_MODE=http`.
+The benchmark produces:
 
-For the report, interpret low eMBB throughput as follows:
+- Scenario A: uRLLC idle latency, jitter, and loss.
+- Scenario B: eMBB-only throughput under the scaled broadband profile.
+- Scenario C: uRLLC SLA while eMBB is saturated.
+- Scenario D: sustained stability samples for Grafana/report screenshots.
 
-- If HTTP is low but `iperf3` is near 100-150 Mbps, the bottleneck is the HTTP demo server/client path, not HTB.
-- If both HTTP and `iperf3` stay low, the likely bottleneck is VM CPU scheduling, virtual NIC throughput, or Open5GS userspace GTP-U forwarding.
+Reports are written to `reports/` as Markdown and CSV.
+
+For the report, interpret eMBB throughput carefully:
+
+- The Open5GS UPF in this lab is userspace GTP-U, so its forwarding ceiling can be much lower than the configured theoretical 5G target.
+- The benchmark therefore uses a scaled profile, where the question is whether the slicing policy protects uRLLC and allocates eMBB consistently at the lab's real data-plane capacity.
 - If uRLLC jitter rises under eMBB load, check `docker exec upf-urllc tc qdisc show dev ogstun`; the expected uRLLC profile is `htb -> netem -> fq_codel`.
 
 To debug a low eMBB result, run:
@@ -203,7 +167,7 @@ Note that HTTP download and `iperf3 -R` both exercise the downlink path, but the
 Suggested report wording after the debug run:
 
 ```text
-uRLLC achieved strong isolation, with a jitter isolation ratio close to 1.0, showing that HTB/fq_codel effectively protects the latency-sensitive slice in the testbed. The measured eMBB throughput remained below the 100-150 Mbps target because of testbed-layer limits, especially Open5GS userspace GTP-U overhead and VM CPU scheduling. This is a limitation of the softwarized 5G core environment and does not invalidate the slice resource isolation mechanism. The results support the correctness of the per-slice resource separation design.
+uRLLC achieved strong isolation, with a jitter isolation ratio close to 1.0, showing that HTB/fq_codel effectively protects the latency-sensitive slice in the testbed. Because the VM-based Open5GS UPF has a limited userspace GTP-U forwarding ceiling, the experiment uses a scaled resource profile instead of claiming hardware-grade 5G throughput. Within that scaled capacity, eMBB receives a stable broadband allocation while uRLLC keeps its latency and jitter SLA under eMBB saturation. The results support the correctness of the per-slice resource separation and optimization design.
 ```
 
 ## Web UI

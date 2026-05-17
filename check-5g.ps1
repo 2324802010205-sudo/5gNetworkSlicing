@@ -66,7 +66,8 @@ Write-Host "== Containers =="
 $containers = @(
     "mongo", "nrf", "amf", "smf", "ausf", "udm", "udr", "pcf",
     "upf-embb", "upf-urllc", "webui", "prometheus", "grafana",
-    "gnb", "ue-embb", "ue-urllc", "pushgateway", "node-exporter", "cadvisor"
+    "gnb", "ue-embb", "ue-urllc", "pushgateway", "node-exporter", "cadvisor",
+    "embb-iperf-server"
 )
 foreach ($container in $containers) {
     Need-Container $container

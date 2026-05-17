@@ -58,7 +58,7 @@ fi
 
 echo
 echo "== Containers =="
-for c in mongo nrf amf smf ausf udm udr pcf upf-embb upf-urllc webui prometheus grafana gnb ue-embb ue-urllc pushgateway node-exporter cadvisor; do
+for c in mongo nrf amf smf ausf udm udr pcf upf-embb upf-urllc webui prometheus grafana gnb ue-embb ue-urllc pushgateway node-exporter cadvisor embb-iperf-server; do
   need_container "$c"
 done
 

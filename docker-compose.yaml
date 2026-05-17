@@ -181,6 +181,7 @@ services:
       - ./scripts/upf-embb-start.sh:/scripts/upf-embb-start.sh:ro
       - ./scripts/apply-slice-qos.sh:/scripts/apply-slice-qos.sh:ro
     restart: unless-stopped
+    cpu_shares: 4096
     deploy:
       resources:
         limits:
@@ -213,6 +214,7 @@ services:
       - ./scripts/upf-urllc-start.sh:/scripts/upf-urllc-start.sh:ro
       - ./scripts/apply-slice-qos.sh:/scripts/apply-slice-qos.sh:ro
     restart: unless-stopped
+    cpu_shares: 3072
     deploy:
       resources:
         limits:
@@ -403,23 +405,6 @@ services:
     ports:
       - "9091:9091"
     restart: unless-stopped
-
-  embb-traffic-source:
-    image: python:3.12-alpine
-    container_name: embb-traffic-source
-    command: >
-      sh -c "mkdir -p /srv &&
-             truncate -s $${EMBB_FILE_SIZE:-1G} /srv/embb.bin &&
-             python -m http.server 8080 --bind 0.0.0.0 --directory /srv"
-    networks:
-      br-5gcore:
-        ipv4_address: 172.20.0.220
-    restart: unless-stopped
-    deploy:
-      resources:
-        limits:
-          cpus: '0.3'
-          memory: 128M
 
   embb-iperf-server:
     image: networkstatic/iperf3:latest
