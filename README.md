@@ -132,7 +132,7 @@ nohup bash scripts/push-metrics.sh > /tmp/push-metrics.log 2>&1 &
 Restart Grafana after changing dashboard/provisioning files:
 
 ```bash
-docker compose restart grafana
+docker compose up -d --force-recreate grafana
 ```
 
 Open Grafana:
@@ -160,6 +160,14 @@ If old non-`_total` metrics are still shown in Prometheus, clear the Pushgateway
 curl -X DELETE http://localhost:9091/metrics/job/upf_embb
 curl -X DELETE http://localhost:9091/metrics/job/upf_urllc
 pkill -f scripts/push-metrics.sh
+nohup bash scripts/push-metrics.sh > /tmp/push-metrics.log 2>&1 &
+```
+
+If the pusher exits, check:
+
+```bash
+cat /tmp/push-metrics.log
+sed -i 's/\r$//' scripts/push-metrics.sh
 nohup bash scripts/push-metrics.sh > /tmp/push-metrics.log 2>&1 &
 ```
 

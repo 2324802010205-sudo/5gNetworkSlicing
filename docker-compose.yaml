@@ -313,6 +313,8 @@ services:
       br-5gcore:
         ipv4_address: 172.20.0.214
     privileged: true
+    healthcheck:
+      disable: true
     restart: unless-stopped
     volumes:
       - /:/rootfs:ro
