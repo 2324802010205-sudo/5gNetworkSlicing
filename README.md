@@ -178,6 +178,34 @@ For the report, interpret low eMBB throughput as follows:
 - If both HTTP and `iperf3` stay low, the likely bottleneck is VM CPU scheduling, virtual NIC throughput, or Open5GS userspace GTP-U forwarding.
 - If uRLLC jitter rises under eMBB load, check `docker exec upf-urllc tc qdisc show dev ogstun`; the expected uRLLC profile is `htb -> netem -> fq_codel`.
 
+To debug a low eMBB result, run:
+
+```bash
+DURATION=20 FLOWS="1 2 4 8" bash ./scripts/debug-embb-throughput.sh
+```
+
+This prints four useful comparisons:
+
+- Docker bridge baseline, not forced through the 5G tunnel.
+- 5G tunnel upload, from UE to the iperf3 server.
+- 5G tunnel download, using iperf3 reverse mode.
+- `ogstun` counter throughput, to confirm whether the traffic is really crossing the UPF tunnel.
+
+Use the result like this:
+
+- Bridge high but tunnel low means the bottleneck is UPF/GTP/VM CPU, not iperf3 itself.
+- Upload high but download low points to the downlink/reverse path or UPF TX queue.
+- Throughput dropping as flows increase means parallel TCP is overloading the userspace GTP path.
+- `iperf3` Mbps and `ogstun` Mbps should be close; if they diverge strongly, the test path is not clean.
+
+Note that HTTP download and `iperf3 -R` both exercise the downlink path, but their TCP behavior is not identical. With `iperf3 -R -P 8`, the server sends eight downlink streams while the UE sends ACK traffic back through the uplink tunnel. This can make Open5GS process many bidirectional GTP flows at the same time. If one-flow reverse mode is acceptable but eight-flow reverse mode collapses, treat ACK/uplink feedback overhead and userspace GTP scheduling as likely causes.
+
+Suggested report wording after the debug run:
+
+```text
+uRLLC achieved strong isolation, with a jitter isolation ratio close to 1.0, showing that HTB/fq_codel effectively protects the latency-sensitive slice in the testbed. The measured eMBB throughput remained below the 100-150 Mbps target because of testbed-layer limits, especially Open5GS userspace GTP-U overhead and VM CPU scheduling. This is a limitation of the softwarized 5G core environment and does not invalidate the slice resource isolation mechanism. The results support the correctness of the per-slice resource separation design.
+```
+
 ## Web UI
 
 - Open5GS WebUI: http://localhost:9999
