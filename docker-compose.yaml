@@ -179,6 +179,7 @@ services:
     volumes:
       - ./config/upf-embb.yaml:/opt/open5gs/etc/open5gs/upf-embb.yaml:ro
       - ./scripts/upf-embb-start.sh:/scripts/upf-embb-start.sh:ro
+      - ./scripts/apply-slice-qos.sh:/scripts/apply-slice-qos.sh:ro
     restart: unless-stopped
     deploy:
       resources:
@@ -210,6 +211,7 @@ services:
     volumes:
       - ./config/upf-urllc.yaml:/opt/open5gs/etc/open5gs/upf-urllc.yaml:ro
       - ./scripts/upf-urllc-start.sh:/scripts/upf-urllc-start.sh:ro
+      - ./scripts/apply-slice-qos.sh:/scripts/apply-slice-qos.sh:ro
     restart: unless-stopped
     deploy:
       resources:

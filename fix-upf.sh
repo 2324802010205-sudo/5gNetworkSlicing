@@ -6,6 +6,32 @@ echo "   5G Network Slicing - Fix UPF"
 echo "   Open5GS v2.7.5 + Docker"
 echo "=================================================="
 
+apply_embb_qos() {
+  if docker exec upf-embb test -f /scripts/apply-slice-qos.sh; then
+    docker exec upf-embb /bin/bash /scripts/apply-slice-qos.sh embb ogstun >/dev/null
+  else
+    docker exec upf-embb tc qdisc del dev ogstun root 2>/dev/null || true
+    docker exec upf-embb tc qdisc add dev ogstun root handle 1: htb default 10
+    docker exec upf-embb tc class add dev ogstun parent 1: classid 1:10 htb \
+      rate 150mbit ceil 180mbit burst 256k cburst 256k prio 2
+    docker exec upf-embb tc qdisc add dev ogstun parent 1:10 handle 10: netem \
+      delay 18ms 6ms distribution normal loss 0.05% limit 2000
+  fi
+}
+
+apply_urllc_qos() {
+  if docker exec upf-urllc test -f /scripts/apply-slice-qos.sh; then
+    docker exec upf-urllc /bin/bash /scripts/apply-slice-qos.sh urllc ogstun >/dev/null
+  else
+    docker exec upf-urllc tc qdisc del dev ogstun root 2>/dev/null || true
+    docker exec upf-urllc tc qdisc add dev ogstun root handle 1: htb default 10
+    docker exec upf-urllc tc class add dev ogstun parent 1: classid 1:10 htb \
+      rate 20mbit ceil 25mbit burst 32k cburst 32k prio 0
+    docker exec upf-urllc tc qdisc add dev ogstun parent 1:10 handle 10: netem \
+      delay 3ms 1ms distribution normal loss 0.01% limit 100
+  fi
+}
+
 echo ""
 echo "[1/7] Fixing IP - UPF-eMBB (10.45.0.1/16)..."
 docker exec upf-embb ip addr del 10.45.0.1/16 dev ogstun 2>/dev/null || true
@@ -18,11 +44,8 @@ docker exec upf-embb iptables -t nat -A POSTROUTING \
   -s 10.45.0.0/16 ! -o ogstun -j MASQUERADE
 echo "      OK"
 
-echo "[3/7] Fixing QoS - UPF-eMBB (100Mbps, 20ms)..."
-docker exec upf-embb tc qdisc del dev ogstun root 2>/dev/null || true
-docker exec upf-embb tc qdisc add dev ogstun root handle 1: htb default 10
-docker exec upf-embb tc class add dev ogstun parent 1: classid 1:10 htb rate 100mbit ceil 100mbit
-docker exec upf-embb tc qdisc add dev ogstun parent 1:10 handle 10: netem delay 20ms
+echo "[3/7] Fixing QoS - UPF-eMBB (150Mbps, mobile broadband delay)..."
+apply_embb_qos
 echo "      OK"
 
 echo ""
@@ -38,12 +61,8 @@ docker exec upf-urllc iptables -t nat -A POSTROUTING \
   -s 10.46.0.0/16 ! -o ogstun -j MASQUERADE
 echo "      OK"
 
-echo "[6/7] Fixing QoS - UPF-uRLLC (20Mbps, low latency)..."
-docker exec upf-urllc tc qdisc del dev ogstun root 2>/dev/null || true
-docker exec upf-urllc tc qdisc add dev ogstun root handle 1: htb default 10
-docker exec upf-urllc tc class add dev ogstun parent 1: classid 1:10 htb \
-  rate 20mbit ceil 20mbit burst 1600b prio 0
-docker exec upf-urllc tc qdisc add dev ogstun parent 1:10 handle 10: netem delay 5ms
+echo "[6/7] Fixing QoS - UPF-uRLLC (20Mbps, low latency/low jitter)..."
+apply_urllc_qos
 echo "      OK"
 
 echo ""

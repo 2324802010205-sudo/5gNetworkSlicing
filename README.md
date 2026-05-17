@@ -33,6 +33,11 @@ The script keeps UPF gateway IPs aligned with `config/smf.yaml`:
 - `upf-embb`: `10.45.0.1/16`
 - `upf-urllc`: `10.46.0.1/16`
 
+It also applies the optimized slice resource profiles:
+
+- eMBB: 150 Mbps committed rate, 180 Mbps burst ceiling, radio-like delay/jitter for video and web traffic.
+- uRLLC: 20 Mbps committed rate, 25 Mbps ceiling, very low delay/jitter and a short queue for latency-sensitive probes.
+
 ## Check If The Lab Is OK
 
 ```bash
@@ -110,6 +115,27 @@ sudo ss -ltnp | grep ':8080'
 bash ./measure-urllc.sh
 bash ./measure-embb.sh
 ```
+
+## Run A Realistic Slice Demo
+
+This demo drives the eMBB slice with video-like HTTPS download traffic while the uRLLC slice continuously measures latency, jitter and loss:
+
+```bash
+bash ./run-5g-slices-real-demo.sh
+```
+
+Useful options:
+
+```bash
+DURATION=300 bash ./run-5g-slices-real-demo.sh
+VIDEO_URL=https://speed.cloudflare.com/__down?bytes=1000000000 bash ./run-5g-slices-real-demo.sh
+PING_TARGET=8.8.8.8 bash ./run-5g-slices-real-demo.sh
+```
+
+Expected behavior:
+
+- eMBB should show much higher throughput and tolerate more delay because it represents mobile broadband/YouTube-like traffic.
+- uRLLC should show low RTT, low jitter and little/no loss, but it is intentionally capped at a lower throughput.
 
 ## Web UI
 
