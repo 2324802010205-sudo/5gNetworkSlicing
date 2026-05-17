@@ -309,8 +309,6 @@ services:
     networks:
       br-5gcore:
         ipv4_address: 172.20.0.214
-    ports:
-      - "8080:8080"
     privileged: true
     restart: unless-stopped
     volumes:

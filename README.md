@@ -94,6 +94,16 @@ sudo rm -rf mongodb_data
 docker compose up -d
 ```
 
+## cAdvisor Port 8080 Busy
+
+If Docker says `failed to bind host port ... 0.0.0.0:8080 ... address already in use`, another process is already using port `8080` on the VM. This lab does not need to expose cAdvisor on the host because Prometheus reaches it inside Docker at `cadvisor:8080`.
+
+Check who uses the port:
+
+```bash
+sudo ss -ltnp | grep ':8080'
+```
+
 ## Measure Slices
 
 ```bash
