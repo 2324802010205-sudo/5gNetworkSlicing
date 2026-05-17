@@ -5,6 +5,7 @@ DURATION="${DURATION:-120}"
 VIDEO_URL="${VIDEO_URL:-https://speed.cloudflare.com/__down?bytes=500000000}"
 PING_TARGET="${PING_TARGET:-1.1.1.1}"
 SOCKS_PORT="${SOCKS_PORT:-1080}"
+EMBB_LOG="${EMBB_LOG:-/tmp/embb-video-traffic.log}"
 
 cleanup() {
     docker exec ue-embb pkill -f "curl -L --interface uesimtun0" >/dev/null 2>&1 || true
@@ -76,16 +77,19 @@ echo "[4/5] Starting eMBB video-like download and URLLC probe"
 echo "      eMBB URL : $VIDEO_URL"
 echo "      URLLC ping target: $PING_TARGET"
 echo "      Duration : ${DURATION}s"
+echo "      eMBB traffic log inside ue-embb: $EMBB_LOG"
 echo
 printf "%-7s %-13s %-13s %-13s %-18s\n" "Time" "eMBB DL" "eMBB UL" "URLLC RTT" "URLLC loss"
 printf "%-7s %-13s %-13s %-13s %-18s\n" "------" "--------" "--------" "---------" "----------"
 
+docker exec ue-embb sh -lc "rm -f '$EMBB_LOG'; touch '$EMBB_LOG'"
+
 if docker exec ue-embb sh -lc "command -v curl >/dev/null 2>&1"; then
     docker exec -d ue-embb sh -lc \
-        "while true; do curl -L --interface uesimtun0 --max-time 30 -o /dev/null '$VIDEO_URL' >/dev/null 2>&1 || sleep 1; done"
+        "while true; do date >> '$EMBB_LOG'; curl -4 -L --interface uesimtun0 --connect-timeout 5 --max-time 30 --speed-time 10 --speed-limit 1024 -o /dev/null -w 'http_code=%{http_code} bytes=%{size_download} speed=%{speed_download}\n' '$VIDEO_URL' >> '$EMBB_LOG' 2>&1 || echo 'curl failed exit='$? >> '$EMBB_LOG'; sleep 1; done"
 elif docker exec ue-embb sh -lc "command -v wget >/dev/null 2>&1"; then
     docker exec -d ue-embb sh -lc \
-        "while true; do wget -T 30 -O /dev/null '$VIDEO_URL' >/dev/null 2>&1 || sleep 1; done"
+        "while true; do date >> '$EMBB_LOG'; wget -4 -T 30 -O /dev/null '$VIDEO_URL' >> '$EMBB_LOG' 2>&1 || echo 'wget failed exit='$? >> '$EMBB_LOG'; sleep 1; done"
 else
     echo "ue-embb has no curl/wget, so eMBB traffic generation cannot start." >&2
     echo "Install curl in the UE image or use the browser SOCKS5 path from start-5g-youtube.sh." >&2
@@ -93,6 +97,7 @@ else
 fi
 
 END=$((SECONDS + DURATION))
+ZERO_WARNED=0
 while [ "$SECONDS" -lt "$END" ]; do
     read -r ERX1 ETX1 < <(byte_counter upf-embb)
     sleep 1
@@ -108,6 +113,16 @@ while [ "$SECONDS" -lt "$END" ]; do
 
     printf "%-7s %-13s %-13s %-13s %-18s\n" \
         "${SECONDS}s" "${EMB_DOWN} Mbps" "${EMB_UP} Mbps" "$RTT" "$LOSS"
+
+    if [ "$ZERO_WARNED" -eq 0 ] && [ "$SECONDS" -ge 10 ]; then
+        if awk -v down="$EMB_DOWN" -v up="$EMB_UP" 'BEGIN {exit ! (down < 0.01 && up < 0.01)}'; then
+            ZERO_WARNED=1
+            echo
+            echo "WARN: eMBB is still 0 Mbps. Last ue-embb traffic log lines:"
+            docker exec ue-embb sh -lc "tail -n 8 '$EMBB_LOG' 2>/dev/null || true"
+            echo
+        fi
+    fi
 done
 
 docker exec ue-embb pkill -f "curl -L --interface uesimtun0" >/dev/null 2>&1 || true
