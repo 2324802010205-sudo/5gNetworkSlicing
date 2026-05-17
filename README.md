@@ -189,14 +189,14 @@ This prints four useful comparisons:
 - Docker bridge baseline, not forced through the 5G tunnel.
 - 5G tunnel upload, from UE to the iperf3 server.
 - 5G tunnel download, using iperf3 reverse mode.
-- `ogstun` counter throughput, to confirm whether the traffic is really crossing the UPF tunnel.
+- `ogstun` counter throughput, to confirm whether the traffic is really crossing the UPF tunnel. Upload is compared with `ogstun` RX, while download is compared with `ogstun` TX.
 
 Use the result like this:
 
 - Bridge high but tunnel low means the bottleneck is UPF/GTP/VM CPU, not iperf3 itself.
 - Upload high but download low points to the downlink/reverse path or UPF TX queue.
 - Throughput dropping as flows increase means parallel TCP is overloading the userspace GTP path.
-- `iperf3` Mbps and `ogstun` Mbps should be close; if they diverge strongly, the test path is not clean.
+- `iperf3` Mbps and the matching `ogstun` direction should be close; if they diverge strongly, the test path is not clean.
 
 Note that HTTP download and `iperf3 -R` both exercise the downlink path, but their TCP behavior is not identical. With `iperf3 -R -P 8`, the server sends eight downlink streams while the UE sends ACK traffic back through the uplink tunnel. This can make Open5GS process many bidirectional GTP flows at the same time. If one-flow reverse mode is acceptable but eight-flow reverse mode collapses, treat ACK/uplink feedback overhead and userspace GTP scheduling as likely causes.
 

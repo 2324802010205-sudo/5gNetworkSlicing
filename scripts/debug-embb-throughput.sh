@@ -37,8 +37,9 @@ ue_ip() {
     docker exec ue-embb ip -4 addr show uesimtun0 2>/dev/null | awk '/inet / {print $2}' | cut -d/ -f1
 }
 
-ogstun_tx_bytes() {
-    docker exec upf-embb awk '$1 ~ /ogstun:/ {print $10}' /proc/net/dev
+ogstun_bytes() {
+    local field="$1"
+    docker exec upf-embb awk -v field="$field" '$1 ~ /ogstun:/ {print $field}' /proc/net/dev
 }
 
 iperf_mbps() {
@@ -70,14 +71,19 @@ run_bridge_baseline() {
 run_tunnel_test() {
     local flows="$1"
     local mode="$2"
-    local before after output mbps tunnel_mbps
+    local before after output mbps tunnel_mbps counter_field counter_name
     local reverse_arg=()
 
     if [ "$mode" = "download" ]; then
         reverse_arg=(-R)
+        counter_field=10
+        counter_name="tx"
+    else
+        counter_field=2
+        counter_name="rx"
     fi
 
-    before=$(ogstun_tx_bytes)
+    before=$(ogstun_bytes "$counter_field")
     docker rm -f "${CLIENT_PREFIX}-ue" >/dev/null 2>&1 || true
     output=$(docker run --rm \
         --name "${CLIENT_PREFIX}-ue" \
@@ -86,13 +92,13 @@ run_tunnel_test() {
         -c "$IPERF_SERVER_IP" -p "$IPERF_PORT" \
         "${reverse_arg[@]}" \
         -B "$EMBB_IP" -t "$DURATION" -P "$flows" 2>&1 || true)
-    after=$(ogstun_tx_bytes)
+    after=$(ogstun_bytes "$counter_field")
 
     mbps=$(printf "%s\n" "$output" | iperf_mbps)
     tunnel_mbps=$(awk -v before="$before" -v after="$after" -v seconds="$DURATION" \
         'BEGIN {printf "%.2f", (after - before) * 8 / seconds / 1000000}')
 
-    printf "%-12s %-6s %-14s %-14s\n" "$mode" "$flows" "$mbps" "$tunnel_mbps"
+    printf "%-12s %-6s %-14s %-14s %-10s\n" "$mode" "$flows" "$mbps" "$tunnel_mbps" "$counter_name"
 }
 
 echo "============================================================"
@@ -123,6 +129,8 @@ echo "Duration   : ${DURATION}s"
 echo
 echo "Route from ue-embb to server through uesimtun0:"
 docker exec ue-embb ip route get "$IPERF_SERVER_IP" oif uesimtun0 from "$EMBB_IP" 2>/dev/null || true
+echo "Route selected by source IP without forcing oif:"
+docker exec ue-embb ip route get "$IPERF_SERVER_IP" from "$EMBB_IP" 2>/dev/null || true
 echo
 
 echo "[1] Docker bridge baseline, not forced through 5G tunnel"
@@ -133,7 +141,7 @@ done
 
 echo
 echo "[2] 5G tunnel tests"
-printf "%-12s %-6s %-14s %-14s\n" "mode" "flows" "iperf_mbps" "ogstun_mbps"
+printf "%-12s %-6s %-14s %-14s %-10s\n" "mode" "flows" "iperf_mbps" "ogstun_mbps" "counter"
 for flows in $FLOWS; do
     run_tunnel_test "$flows" "upload"
     run_tunnel_test "$flows" "download"
@@ -145,4 +153,5 @@ echo "- bridge high, tunnel low: bottleneck is UPF/GTP/VM CPU, not iperf3."
 echo "- upload high, download low: reverse/downlink path or UPF TX queue is the bottleneck."
 echo "- throughput drops as flows increase: parallel TCP is overloading the userspace GTP path."
 echo "- reverse download drops with many flows: TCP ACK/uplink feedback can double the GTP scheduling pressure."
+echo "- upload uses ogstun RX and download uses ogstun TX; compare each mode with its matching counter."
 echo "- iperf_mbps and ogstun_mbps should be close; if not, the traffic is not fully on the tunnel path."
