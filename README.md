@@ -68,6 +68,32 @@ docker exec upf-embb tc qdisc show dev ogstun
 docker exec upf-urllc tc qdisc show dev ogstun
 ```
 
+## Mongo Unhealthy
+
+If `docker compose up -d` says `container mongo is unhealthy`, check the real reason first:
+
+```bash
+docker compose ps mongo
+docker logs mongo --tail 100
+docker inspect mongo --format '{{json .State.Health}}'
+```
+
+Common fixes:
+
+```bash
+docker compose restart mongo
+sudo chown -R 999:999 mongodb_data
+docker compose up -d
+```
+
+If this is a fresh lab and you do not need old subscriber data:
+
+```bash
+docker compose down
+sudo rm -rf mongodb_data
+docker compose up -d
+```
+
 ## Measure Slices
 
 ```bash
