@@ -1,54 +1,99 @@
 # 5G Network Slicing Lab
-## Open5GS + UERANSIM + Docker
 
-## Yêu cầu
-- Ubuntu 22.04 LTS
-- Docker + Docker Compose
-- RAM tối thiểu 8GB
-- CPU 4 cores
+Open5GS + UERANSIM + Docker Compose lab for two slices:
 
-## Cách chạy
+- eMBB: SST 1, SD 000001, DNN `internet`, subnet `10.45.0.0/16`
+- uRLLC: SST 2, SD 000002, DNN `internet2`, subnet `10.46.0.0/16`
 
-### 1. Clone repo
-git clone <repo-url>
-cd 5g-lab
+## Requirements
 
-### 2. Khởi động 5G Core
+- Ubuntu 22.04 or WSL2 with Linux containers
+- Docker and Docker Compose
+- At least 8 GB RAM and 4 CPU cores
+- Host IP forwarding/NAT enabled if UEs need internet access
+
+## Start
+
+```bash
 docker compose up -d
+```
 
-### 3. Khởi động RAN (gNB + UE)
-docker compose -f docker-compose-ueransim.yaml up -d
+The main compose file starts the 5G core, two UPFs, gNB, two UEs, Prometheus, Grafana, Pushgateway, Node Exporter and cAdvisor.
 
-### 4. Fix ogstun IP (QUAN TRỌNG - chạy mỗi lần restart)
-docker exec -u root upf-embb ip addr del 10.45.0.1/16 dev ogstun
-docker exec -u root upf-embb ip addr add 10.45.0.254/16 dev ogstun
-docker exec -u root upf-urllc ip addr del 10.45.0.1/16 dev ogstun
-docker exec -u root upf-urllc ip addr add 10.45.0.254/16 dev ogstun
+## Fix UPF NAT/QoS
 
-### 5. Fix NAT + Routing trên HOST
-sudo sysctl -w net.ipv4.ip_forward=1
-sudo iptables -t nat -A POSTROUTING -s 10.45.0.0/16 -o ens33 -j MASQUERADE
-sudo iptables -P FORWARD ACCEPT
+Run this after containers are up, or after restarting UPF/UE containers:
 
-### 6. Fix FORWARD trong UPF
-docker exec -u root upf-embb iptables -t nat -A POSTROUTING -s 10.45.0.0/16 -o eth0 -j MASQUERADE
-docker exec -u root upf-embb iptables -I FORWARD -i ogstun -o eth0 -j ACCEPT
-docker exec -u root upf-embb iptables -I FORWARD -i eth0 -o ogstun -j ACCEPT
+```bash
+bash ./fix-upf.sh
+```
 
-### 7. Test kết nối
-docker exec -it ue ping -I uesimtun0 1.1.1.1 -c 4
+The script keeps UPF gateway IPs aligned with `config/smf.yaml`:
 
-## Kiến trúc
-UE (10.45.0.1) → uesimtun0 → gNB → AMF → UPF-eMBB (SST=1) → Internet
-UE (10.45.0.2) → uesimtun0 → gNB → AMF → UPF-uRLLC (SST=2) → Internet
+- `upf-embb`: `10.45.0.1/16`
+- `upf-urllc`: `10.46.0.1/16`
 
-## WebUI quản lý thuê bao
-http://localhost:9999
-User: admin / Password: 1423
+## Check If The Lab Is OK
 
-## Giai đoạn 4 - TODO (thành viên C)
-- [ ] Cấu hình QoS TBF/HTB cho UPF-eMBB (100Mbps)
-- [ ] Cấu hình QoS HTB prio cho UPF-uRLLC (20Mbps, latency <10ms)
-- [ ] Cấu hình Linux Cgroups cô lập tài nguyên
-- [ ] Thêm Grafana + Prometheus monitoring
-- [ ] Đo lường và so sánh kết quả 2 slice
+```bash
+bash ./check-5g.sh
+```
+
+On Windows PowerShell:
+
+```powershell
+.\check-5g.ps1
+```
+
+This checks:
+
+- Docker Compose syntax
+- Required containers are running
+- `uesimtun0` exists on both UEs
+- Ping through each 5G tunnel
+- QoS rules on both UPFs
+- Prometheus readiness
+
+Useful manual checks:
+
+```bash
+docker compose ps
+docker logs amf --tail 50
+docker logs smf --tail 50
+docker logs upf-embb --tail 50
+docker logs upf-urllc --tail 50
+docker exec ue-embb ping -I uesimtun0 1.1.1.1 -c 4
+docker exec ue-urllc ping -I uesimtun0 1.1.1.1 -c 4
+docker exec upf-embb tc qdisc show dev ogstun
+docker exec upf-urllc tc qdisc show dev ogstun
+```
+
+## Measure Slices
+
+```bash
+bash ./measure-urllc.sh
+bash ./measure-embb.sh
+```
+
+## Web UI
+
+- Open5GS WebUI: http://localhost:9999
+- Prometheus: http://localhost:9090
+- Grafana: http://localhost:3000
+
+Default Grafana login: `admin` / `admin`
+
+Open5GS WebUI default from the image is commonly `admin` / `1423`.
+
+## Cleanup
+
+```bash
+docker compose down
+```
+
+To remove generated database/monitoring data:
+
+```bash
+docker compose down -v
+sudo rm -rf mongodb_data prometheus_data grafana_data
+```

@@ -1,5 +1,3 @@
-version: '3.8'
-
 networks:
   br-5gcore:
     driver: bridge
@@ -285,6 +283,47 @@ services:
         limits:
           cpus: '0.5'
           memory: 512M
+
+  node-exporter:
+    image: prom/node-exporter:latest
+    container_name: node-exporter
+    networks:
+      br-5gcore:
+        ipv4_address: 172.20.0.213
+    ports:
+      - "9100:9100"
+    restart: unless-stopped
+    command:
+      - '--path.rootfs=/host'
+    volumes:
+      - /:/host:ro,rslave
+    deploy:
+      resources:
+        limits:
+          cpus: '0.2'
+          memory: 128M
+
+  cadvisor:
+    image: gcr.io/cadvisor/cadvisor:latest
+    container_name: cadvisor
+    networks:
+      br-5gcore:
+        ipv4_address: 172.20.0.214
+    ports:
+      - "8080:8080"
+    privileged: true
+    restart: unless-stopped
+    volumes:
+      - /:/rootfs:ro
+      - /var/run:/var/run:ro
+      - /sys:/sys:ro
+      - /var/lib/docker/:/var/lib/docker:ro
+      - /dev/disk/:/dev/disk:ro
+    deploy:
+      resources:
+        limits:
+          cpus: '0.3'
+          memory: 256M
 
   gnb:
     image: gradiant/ueransim:3.2.6
