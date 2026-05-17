@@ -35,10 +35,10 @@ The script keeps UPF gateway IPs aligned with `config/smf.yaml`:
 
 It also applies scaled slice resource profiles. The scale is intentional: this VM-based Open5GS UPF has a much lower data-plane ceiling than a hardware-accelerated 5G UPF, so the benchmark evaluates resource isolation and SLA behavior at the capacity the lab can actually forward.
 
-- eMBB: 12 Mbps guaranteed rate, 15 Mbps ceiling, broadband-oriented queue.
-- uRLLC: 4 Mbps guaranteed rate, 8 Mbps ceiling, low delay/jitter and `fq_codel` short queue.
+- eMBB: 8 Mbps guaranteed rate, 10 Mbps ceiling, broadband-oriented queue.
+- uRLLC: 2 Mbps guaranteed rate, 4 Mbps ceiling, low delay/jitter and `fq_codel` short queue.
 
-The eMBB profile is intentionally set below the measured downlink tunnel ceiling. This makes HTB enforce a real policy instead of configuring a rate higher than the Open5GS userspace UPF can forward. `fix-upf.sh` also raises the eMBB `ogstun` TX queue length and adds `fq_codel` below the eMBB shaping class to reduce TX path head-of-line blocking while keeping HTB as the root slicing qdisc.
+The eMBB profile is intentionally set below the measured downlink tunnel ceiling of this VM. This makes HTB enforce a real policy instead of configuring a rate higher than the Open5GS userspace UPF can forward. `fix-upf.sh` also raises the eMBB `ogstun` TX queue length and adds `fq_codel` below the eMBB shaping class to reduce TX path head-of-line blocking while keeping HTB as the root slicing qdisc.
 
 ## Check If The Lab Is OK
 
@@ -135,6 +135,7 @@ The benchmark produces:
 - Scenario B: eMBB-only throughput under the downlink-safe scaled broadband profile.
 - Scenario C: uRLLC SLA while eMBB is saturated.
 - Scenario D: sustained stability samples for Grafana/report screenshots.
+- SLA and allocation-efficiency indicators, so the conclusion is about resource optimization rather than raw throughput.
 
 Reports are written to `reports/` as Markdown and CSV.
 
@@ -170,7 +171,7 @@ Note that HTTP download and `iperf3 -R` both exercise the downlink path, but the
 Suggested report wording after the debug run:
 
 ```text
-uRLLC achieved strong isolation, with a jitter isolation ratio close to 1.0, showing that HTB/fq_codel effectively protects the latency-sensitive slice in the testbed. Because the VM-based Open5GS UPF has a limited userspace GTP-U forwarding ceiling, the experiment uses a scaled resource profile instead of claiming hardware-grade 5G throughput. Within that scaled capacity, eMBB receives a stable broadband allocation while uRLLC keeps its latency and jitter SLA under eMBB saturation. The results support the correctness of the per-slice resource separation and optimization design.
+uRLLC achieved strong isolation, with a jitter isolation ratio close to 1.0, showing that HTB/fq_codel effectively protects the latency-sensitive slice in the testbed. Because the VM-based Open5GS UPF has a limited userspace GTP-U forwarding ceiling, the experiment uses a scaled resource profile instead of claiming hardware-grade 5G throughput. Within that measured capacity, eMBB uses its allocated broadband ceiling efficiently while uRLLC keeps its latency and jitter SLA under eMBB saturation. The results support the correctness of the per-slice resource separation and optimization design.
 ```
 
 ## Web UI

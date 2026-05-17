@@ -13,7 +13,7 @@ apply_embb_qos() {
     docker exec upf-embb tc qdisc del dev ogstun root 2>/dev/null || true
     docker exec upf-embb tc qdisc add dev ogstun root handle 1: htb default 10 r2q 1000
     docker exec upf-embb tc class add dev ogstun parent 1: classid 1:10 htb \
-      rate 12mbit ceil 15mbit burst 128k cburst 128k prio 2
+      rate 8mbit ceil 10mbit burst 128k cburst 128k prio 2
     docker exec upf-embb tc qdisc add dev ogstun parent 1:10 handle 10: netem \
       delay 8ms 2ms distribution normal loss 0% limit 1000
     docker exec upf-embb tc qdisc add dev ogstun parent 10:1 handle 20: fq_codel \
@@ -28,7 +28,7 @@ apply_urllc_qos() {
     docker exec upf-urllc tc qdisc del dev ogstun root 2>/dev/null || true
     docker exec upf-urllc tc qdisc add dev ogstun root handle 1: htb default 10 r2q 1000
     docker exec upf-urllc tc class add dev ogstun parent 1: classid 1:10 htb \
-      rate 4mbit ceil 8mbit burst 32k cburst 32k prio 0
+      rate 2mbit ceil 4mbit burst 32k cburst 32k prio 0
     docker exec upf-urllc tc qdisc add dev ogstun parent 1:10 handle 10: netem \
       delay 2ms 0.3ms distribution normal loss 0.01% limit 20
     docker exec upf-urllc tc qdisc add dev ogstun parent 10:1 handle 20: fq_codel \
@@ -49,7 +49,7 @@ docker exec upf-embb iptables -t nat -A POSTROUTING \
   -s 10.45.0.0/16 ! -o ogstun -j MASQUERADE
 echo "      OK"
 
-echo "[3/7] Fixing QoS - UPF-eMBB (downlink-safe scaled profile: 12Mbps rate, 15Mbps ceiling)..."
+echo "[3/7] Fixing QoS - UPF-eMBB (measured downlink profile: 8Mbps rate, 10Mbps ceiling)..."
 apply_embb_qos
 echo "      OK"
 
@@ -67,7 +67,7 @@ docker exec upf-urllc iptables -t nat -A POSTROUTING \
   -s 10.46.0.0/16 ! -o ogstun -j MASQUERADE
 echo "      OK"
 
-echo "[6/7] Fixing QoS - UPF-uRLLC (scaled lab profile: 4Mbps rate, 8Mbps ceiling, low jitter)..."
+echo "[6/7] Fixing QoS - UPF-uRLLC (latency-first profile: 2Mbps rate, 4Mbps ceiling, low jitter)..."
 apply_urllc_qos
 echo "      OK"
 

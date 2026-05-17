@@ -12,6 +12,9 @@ IPERF_IMAGE="${IPERF_IMAGE:-networkstatic/iperf3:latest}"
 IPERF_SERVER="${IPERF_SERVER:-embb-iperf-server}"
 IPERF_SERVER_IP="${IPERF_SERVER_IP:-172.20.0.221}"
 IPERF_PORT="${IPERF_PORT:-5201}"
+EMBB_CEIL_MBPS="${EMBB_CEIL_MBPS:-10}"
+URLLC_RTT_SLA_MS="${URLLC_RTT_SLA_MS:-10}"
+URLLC_JITTER_SLA_MS="${URLLC_JITTER_SLA_MS:-2}"
 REPORT_DIR="${REPORT_DIR:-reports}"
 RUN_ID="${RUN_ID:-$(date +%Y%m%d-%H%M%S)}"
 REPORT_FILE="$REPORT_DIR/5g-resource-optimization-$RUN_ID.md"
@@ -107,6 +110,21 @@ ratio() {
     }'
 }
 
+percent() {
+    awk -v value="$1" -v total="$2" 'BEGIN {
+      if (value == "timeout" || total <= 0) print "n/a";
+      else printf "%.1f", value / total * 100
+    }'
+}
+
+sla_status() {
+    awk -v avg="$1" -v jitter="$2" -v rtt_sla="$URLLC_RTT_SLA_MS" -v jitter_sla="$URLLC_JITTER_SLA_MS" 'BEGIN {
+      if (avg == "timeout" || jitter == "timeout") print "FAIL";
+      else if (avg <= rtt_sla && jitter <= jitter_sla) print "PASS";
+      else print "FAIL";
+    }'
+}
+
 start_embb_download() {
     docker rm -f "$IPERF_CLIENT_NAME" >/dev/null 2>&1 || true
     docker run -d --rm \
@@ -134,8 +152,8 @@ done
 
 echo "[1/6] Applying scaled resource profiles"
 bash ./fix-upf.sh >/dev/null 2>&1
-echo "      eMBB : 12 Mbps guaranteed, 15 Mbps ceiling"
-echo "      URLLC: 4 Mbps guaranteed, 8 Mbps ceiling, low queue"
+echo "      eMBB : 8 Mbps guaranteed, 10 Mbps ceiling"
+echo "      URLLC: 2 Mbps guaranteed, 4 Mbps ceiling, low queue"
 
 EMBB_IP=$(ue_ip ue-embb)
 URLLC_IP=$(ue_ip ue-urllc)
@@ -162,7 +180,8 @@ IDLE_CSV=$(ping_urllc)
 IDLE_AVG=$(field "$IDLE_CSV" 2)
 IDLE_JITTER=$(field "$IDLE_CSV" 4)
 IDLE_LOSS=$(field "$IDLE_CSV" 5)
-echo "      avg=$IDLE_AVG ms, jitter=$IDLE_JITTER ms, loss=$IDLE_LOSS"
+IDLE_SLA=$(sla_status "$IDLE_AVG" "$IDLE_JITTER")
+echo "      avg=$IDLE_AVG ms, jitter=$IDLE_JITTER ms, loss=$IDLE_LOSS, SLA=$IDLE_SLA"
 
 echo
 echo "[4/6] Scenario B - eMBB-only throughput under scaled ceiling"
@@ -170,7 +189,8 @@ start_embb_download "$((DURATION + 5))"
 sleep 3
 EMBB_ONLY_MBPS=$(measure_counter_mbps upf-embb 10 "$DURATION")
 stop_embb_download
-echo "      eMBB downlink=$EMBB_ONLY_MBPS Mbps"
+EMBB_ONLY_EFF=$(percent "$EMBB_ONLY_MBPS" "$EMBB_CEIL_MBPS")
+echo "      eMBB downlink=$EMBB_ONLY_MBPS Mbps, allocation efficiency=${EMBB_ONLY_EFF}%"
 
 echo
 echo "[5/6] Scenario C - URLLC SLA while eMBB is saturated"
@@ -184,8 +204,11 @@ LOAD_JITTER=$(field "$LOAD_CSV" 4)
 LOAD_LOSS=$(field "$LOAD_CSV" 5)
 LATENCY_RATIO=$(ratio "$IDLE_AVG" "$LOAD_AVG")
 JITTER_RATIO=$(ratio "$IDLE_JITTER" "$LOAD_JITTER")
+LOAD_SLA=$(sla_status "$LOAD_AVG" "$LOAD_JITTER")
+LOAD_EMBB_EFF=$(percent "$LOAD_EMBB_MBPS" "$EMBB_CEIL_MBPS")
 echo "      eMBB downlink=$LOAD_EMBB_MBPS Mbps"
-echo "      URLLC avg=$LOAD_AVG ms, jitter=$LOAD_JITTER ms, loss=$LOAD_LOSS"
+echo "      eMBB allocation efficiency=${LOAD_EMBB_EFF}% of ${EMBB_CEIL_MBPS} Mbps ceiling"
+echo "      URLLC avg=$LOAD_AVG ms, jitter=$LOAD_JITTER ms, loss=$LOAD_LOSS, SLA=$LOAD_SLA"
 echo "      isolation ratios: latency=$LATENCY_RATIO, jitter=$JITTER_RATIO"
 
 echo
@@ -229,8 +252,9 @@ This benchmark uses a scaled resource profile because the Open5GS userspace UPF 
 - eMBB generator: iperf3 reverse TCP, ${IPERF_SERVER_IP}:${IPERF_PORT}
 - eMBB parallel flows: $EMBB_PARALLEL
 - uRLLC latency target: $URLLC_TARGET
-- eMBB profile: 12 Mbps guaranteed, 15 Mbps ceiling
-- uRLLC profile: 4 Mbps guaranteed, 8 Mbps ceiling, fq_codel low queue
+- eMBB profile: 8 Mbps guaranteed, 10 Mbps ceiling
+- uRLLC profile: 2 Mbps guaranteed, 4 Mbps ceiling, fq_codel low queue
+- uRLLC SLA target: avg RTT <= ${URLLC_RTT_SLA_MS} ms, jitter <= ${URLLC_JITTER_SLA_MS} ms
 
 ## Results
 
@@ -239,11 +263,15 @@ This benchmark uses a scaled resource profile because the Open5GS userspace UPF 
 | uRLLC idle | avg RTT | $IDLE_AVG ms |
 | uRLLC idle | jitter/mdev | $IDLE_JITTER ms |
 | uRLLC idle | packet loss | $IDLE_LOSS |
+| uRLLC idle | SLA status | $IDLE_SLA |
 | eMBB only | downlink throughput | $EMBB_ONLY_MBPS Mbps |
+| eMBB only | allocation efficiency | ${EMBB_ONLY_EFF}% |
 | eMBB + uRLLC | eMBB downlink throughput | $LOAD_EMBB_MBPS Mbps |
+| eMBB + uRLLC | eMBB allocation efficiency | ${LOAD_EMBB_EFF}% |
 | eMBB + uRLLC | uRLLC avg RTT | $LOAD_AVG ms |
 | eMBB + uRLLC | uRLLC jitter/mdev | $LOAD_JITTER ms |
 | eMBB + uRLLC | uRLLC packet loss | $LOAD_LOSS |
+| eMBB + uRLLC | uRLLC SLA status | $LOAD_SLA |
 
 ## Isolation Indicators
 
@@ -252,14 +280,14 @@ This benchmark uses a scaled resource profile because the Open5GS userspace UPF 
 
 ## Interpretation
 
-A ratio close to 1.00 means uRLLC remains stable while eMBB consumes its allocated broadband slice. If the absolute eMBB throughput is below 100-150 Mbps, interpret that as a limitation of the softwarized VM UPF data plane, not as a failure of the resource isolation policy.
+A ratio close to 1.00 means uRLLC remains stable while eMBB consumes its allocated broadband slice. The eMBB ceiling is intentionally set below the measured downlink tunnel ceiling so HTB enforces a real resource policy. The optimization target is SLA stability plus high allocation efficiency within the testbed's real forwarding capacity, not a hardware-grade 5G throughput claim.
 
 Stability samples: $STABILITY_CSV
 EOF_REPORT
 
 cat > "$CSV_FILE" <<EOF_CSV
-run_id,embb_only_mbps,embb_load_mbps,urllc_idle_avg_ms,urllc_load_avg_ms,urllc_idle_jitter_ms,urllc_load_jitter_ms,urllc_idle_loss,urllc_load_loss,latency_ratio,jitter_ratio
-$RUN_ID,$EMBB_ONLY_MBPS,$LOAD_EMBB_MBPS,$IDLE_AVG,$LOAD_AVG,$IDLE_JITTER,$LOAD_JITTER,$IDLE_LOSS,$LOAD_LOSS,$LATENCY_RATIO,$JITTER_RATIO
+run_id,embb_ceil_mbps,embb_only_mbps,embb_load_mbps,embb_only_efficiency_pct,embb_load_efficiency_pct,urllc_idle_avg_ms,urllc_load_avg_ms,urllc_idle_jitter_ms,urllc_load_jitter_ms,urllc_idle_loss,urllc_load_loss,urllc_idle_sla,urllc_load_sla,latency_ratio,jitter_ratio
+$RUN_ID,$EMBB_CEIL_MBPS,$EMBB_ONLY_MBPS,$LOAD_EMBB_MBPS,$EMBB_ONLY_EFF,$LOAD_EMBB_EFF,$IDLE_AVG,$LOAD_AVG,$IDLE_JITTER,$LOAD_JITTER,$IDLE_LOSS,$LOAD_LOSS,$IDLE_SLA,$LOAD_SLA,$LATENCY_RATIO,$JITTER_RATIO
 EOF_CSV
 
 echo
