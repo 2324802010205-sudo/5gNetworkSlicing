@@ -1,7 +1,7 @@
 # All project configuration snapshot
 # Generated from repo config files. Do not include this file itself.
 # Format: each YAML document stores one source file as literal text.
-generated_at: 2026-06-22T22:20:46+0700
+generated_at: 2026-06-22T22:47:57+0700
 file_count: 22
 sources:
   - .env
@@ -55,8 +55,8 @@ content: |
       container_name: mongo
       profiles: ["core"]
       restart: *restart_policy
-      mem_limit: 256m
-      cpus: 0.30
+      mem_limit: 384m
+      cpus: 0.40
       command: ["mongod", "--bind_ip_all"]
       networks:
         br-5gcore:
@@ -66,14 +66,14 @@ content: |
       healthcheck:
         test: ["CMD-SHELL", "mongosh --quiet --eval 'db.adminCommand({ ping: 1 }).ok' mongodb://127.0.0.1:27017/admin | grep -q 1"]
         interval: 10s
-        timeout: 10s
-        retries: 10
-        start_period: 30s
+        timeout: 20s
+        retries: 20
+        start_period: 60s
       deploy:
         resources:
           limits:
-            cpus: '0.30'
-            memory: 256M
+            cpus: '0.40'
+            memory: 384M
   
     nrf:
       image: *open5gs_image

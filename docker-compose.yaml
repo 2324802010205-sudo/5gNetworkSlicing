@@ -17,8 +17,8 @@ services:
     container_name: mongo
     profiles: ["core"]
     restart: *restart_policy
-    mem_limit: 256m
-    cpus: 0.30
+    mem_limit: 384m
+    cpus: 0.40
     command: ["mongod", "--bind_ip_all"]
     networks:
       br-5gcore:
@@ -28,14 +28,14 @@ services:
     healthcheck:
       test: ["CMD-SHELL", "mongosh --quiet --eval 'db.adminCommand({ ping: 1 }).ok' mongodb://127.0.0.1:27017/admin | grep -q 1"]
       interval: 10s
-      timeout: 10s
-      retries: 10
-      start_period: 30s
+      timeout: 20s
+      retries: 20
+      start_period: 60s
     deploy:
       resources:
         limits:
-          cpus: '0.30'
-          memory: 256M
+          cpus: '0.40'
+          memory: 384M
 
   nrf:
     image: *open5gs_image
