@@ -1,147 +1,2258 @@
-# Combined UERANSIM configuration files
-# Source: config-ueransim/gnb.yaml
+# All project configuration snapshot
+# Generated from repo config files. Do not include this file itself.
+# Format: each YAML document stores one source file as literal text.
+generated_at: 2026-06-22T22:20:46+0700
+file_count: 22
+sources:
+  - .env
+  - docker-compose.yaml
+  - config/amf.yaml
+  - config/ausf.yaml
+  - config/nrf.yaml
+  - config/nssf.yaml
+  - config/pcf.yaml
+  - config/prometheus.yml
+  - config/smf.yaml
+  - config/udm.yaml
+  - config/udr.yaml
+  - config/upf-embb.yaml
+  - config/upf-urllc.yaml
+  - config-ueransim/gnb.yaml
+  - config-ueransim/ue-embb.yaml
+  - config-ueransim/ue-urllc.yaml
+  - grafana/provisioning/dashboards/dashboards.yml
+  - grafana/provisioning/datasources/prometheus.yml
+  - grafana-dashboard-5g.json
+  - grafana-5g-slicing-dashboard.json
+  - grafana-bandwidth-dashboard.json
+  - grafana/dashboards/5g-network-slicing.json
+
 ---
-mcc: '901'
-mnc: '70'
-nci: '0x000000010'
-idLength: 32
-tac: 1
+source: .env
+content: |
+  COMPOSE_PROFILES=core
+  RESTART_POLICY=on-failure:3
 
-# gNB sử dụng IP tĩnh 172.20.1.10
-linkIp: 172.20.1.10
-ngapIp: 172.20.1.10
-gtpIp: 172.20.1.10
-
-# AMF configuration - kết nối tới AMF IP tĩnh
-amfConfigs:
-  - address: 172.20.0.20
-    port: 38412
-
-# Hỗ trợ 2 slices: eMBB, URLLC
-slices:
-  - sst: 1  # eMBB - Enhanced Mobile Broadband
-    sd: 0x000001
-  - sst: 2  # URLLC - Ultra-Reliable Low-Latency
-    sd: 0x000002
-
-ignoreStreamIds: true
-
-# Source: config-ueransim/ue-embb.yaml
 ---
-# UE Configuration for eMBB (Enhanced Mobile Broadband)
-# Use case: 4K/8K video streaming, AR/VR, Cloud gaming
+source: docker-compose.yaml
+content: |
+  x-open5gs-image: &open5gs_image gradiant/open5gs:2.7.5
+  x-ueransim-image: &ueransim_image gradiant/ueransim:3.2.6
+  x-restart-policy: &restart_policy "${RESTART_POLICY:-on-failure:3}"
+  
+  networks:
+    br-5gcore:
+      driver: bridge
+      ipam:
+        driver: default
+        config:
+          - subnet: 172.20.0.0/16
+            gateway: 172.20.0.1
+  
+  services:
+    mongo:
+      image: mongo:6-jammy
+      container_name: mongo
+      profiles: ["core"]
+      restart: *restart_policy
+      mem_limit: 256m
+      cpus: 0.30
+      command: ["mongod", "--bind_ip_all"]
+      networks:
+        br-5gcore:
+          ipv4_address: 172.20.0.5
+      volumes:
+        - ./mongodb_data:/data/db
+      healthcheck:
+        test: ["CMD-SHELL", "mongosh --quiet --eval 'db.adminCommand({ ping: 1 }).ok' mongodb://127.0.0.1:27017/admin | grep -q 1"]
+        interval: 10s
+        timeout: 10s
+        retries: 10
+        start_period: 30s
+      deploy:
+        resources:
+          limits:
+            cpus: '0.30'
+            memory: 256M
+  
+    nrf:
+      image: *open5gs_image
+      container_name: nrf
+      profiles: ["core"]
+      mem_limit: 96m
+      cpus: 0.15
+      command: open5gs-nrfd -c /opt/open5gs/etc/open5gs/nrf.yaml
+      depends_on:
+        mongo:
+          condition: service_healthy
+      networks:
+        br-5gcore:
+          ipv4_address: 172.20.0.10
+      volumes:
+        - ./config/nrf.yaml:/opt/open5gs/etc/open5gs/nrf.yaml:ro
+      restart: *restart_policy
+      deploy:
+        resources:
+          limits:
+            cpus: '0.15'
+            memory: 96M
+  
+    nssf:
+      image: *open5gs_image
+      container_name: nssf
+      profiles: ["core"]
+      mem_limit: 96m
+      cpus: 0.15
+      command: open5gs-nssfd -c /opt/open5gs/etc/open5gs/nssf.yaml
+      depends_on:
+        - nrf
+      networks:
+        br-5gcore:
+          ipv4_address: 172.20.0.15
+      volumes:
+        - ./config/nssf.yaml:/opt/open5gs/etc/open5gs/nssf.yaml:ro
+      restart: *restart_policy
+      deploy:
+        resources:
+          limits:
+            cpus: '0.15'
+            memory: 96M
+  
+    amf:
+      image: *open5gs_image
+      container_name: amf
+      profiles: ["core"]
+      mem_limit: 192m
+      cpus: 0.25
+      command: open5gs-amfd -c /opt/open5gs/etc/open5gs/amf.yaml
+      depends_on:
+        - nrf
+        - nssf
+      networks:
+        br-5gcore:
+          ipv4_address: 172.20.0.20
+      volumes:
+        - ./config/amf.yaml:/opt/open5gs/etc/open5gs/amf.yaml:ro
+      restart: *restart_policy
+      deploy:
+        resources:
+          limits:
+            cpus: '0.25'
+            memory: 192M
+  
+    smf:
+      image: *open5gs_image
+      container_name: smf
+      profiles: ["core"]
+      mem_limit: 192m
+      cpus: 0.25
+      command: open5gs-smfd -c /opt/open5gs/etc/open5gs/smf.yaml
+      depends_on:
+        - nrf
+      networks:
+        br-5gcore:
+          ipv4_address: 172.20.0.30
+      volumes:
+        - ./config/smf.yaml:/opt/open5gs/etc/open5gs/smf.yaml:ro
+      restart: *restart_policy
+      deploy:
+        resources:
+          limits:
+            cpus: '0.25'
+            memory: 192M
+  
+    ausf:
+      image: *open5gs_image
+      container_name: ausf
+      profiles: ["core"]
+      mem_limit: 96m
+      cpus: 0.10
+      command: open5gs-ausfd -c /opt/open5gs/etc/open5gs/ausf.yaml
+      depends_on:
+        - nrf
+      networks:
+        br-5gcore:
+          ipv4_address: 172.20.0.40
+      volumes:
+        - ./config/ausf.yaml:/opt/open5gs/etc/open5gs/ausf.yaml:ro
+      restart: *restart_policy
+      deploy:
+        resources:
+          limits:
+            cpus: '0.10'
+            memory: 96M
+  
+    udm:
+      image: *open5gs_image
+      container_name: udm
+      profiles: ["core"]
+      mem_limit: 96m
+      cpus: 0.10
+      command: open5gs-udmd -c /opt/open5gs/etc/open5gs/udm.yaml
+      depends_on:
+        - nrf
+      networks:
+        br-5gcore:
+          ipv4_address: 172.20.0.50
+      volumes:
+        - ./config/udm.yaml:/opt/open5gs/etc/open5gs/udm.yaml:ro
+      restart: *restart_policy
+      deploy:
+        resources:
+          limits:
+            cpus: '0.10'
+            memory: 96M
+  
+    udr:
+      image: *open5gs_image
+      container_name: udr
+      profiles: ["core"]
+      mem_limit: 128m
+      cpus: 0.15
+      command: open5gs-udrd -c /opt/open5gs/etc/open5gs/udr.yaml
+      depends_on:
+        - mongo
+        - nrf
+      networks:
+        br-5gcore:
+          ipv4_address: 172.20.0.60
+      volumes:
+        - ./config/udr.yaml:/opt/open5gs/etc/open5gs/udr.yaml:ro
+      restart: *restart_policy
+      deploy:
+        resources:
+          limits:
+            cpus: '0.15'
+            memory: 128M
+  
+    pcf:
+      image: *open5gs_image
+      container_name: pcf
+      profiles: ["core"]
+      mem_limit: 96m
+      cpus: 0.10
+      command: open5gs-pcfd -c /opt/open5gs/etc/open5gs/pcf.yaml
+      depends_on:
+        - nrf
+      networks:
+        br-5gcore:
+          ipv4_address: 172.20.0.70
+      volumes:
+        - ./config/pcf.yaml:/opt/open5gs/etc/open5gs/pcf.yaml:ro
+      restart: *restart_policy
+      deploy:
+        resources:
+          limits:
+            cpus: '0.10'
+            memory: 96M
+  
+    upf-embb:
+      image: *open5gs_image
+      container_name: upf-embb
+      profiles: ["core"]
+      mem_limit: 384m
+      cpus: 0.50
+      user: root
+      entrypoint: ["/bin/bash", "/scripts/upf-embb-start.sh"]
+      privileged: true
+      cap_add:
+        - NET_ADMIN
+      devices:
+        - /dev/net/tun:/dev/net/tun
+      environment:
+        - IPV4_TUN_ADDR=10.45.0.1/16
+        - IPV4_TUN_SUBNET=10.45.0.0/16
+        - IPV6_TUN_ADDR=cafe::1/64
+        - ENABLE_NAT=true
+        - OGSTUN_TXQUEUELEN=4096
+      networks:
+        br-5gcore:
+          ipv4_address: 172.20.0.100
+      volumes:
+        - ./config/upf-embb.yaml:/opt/open5gs/etc/open5gs/upf-embb.yaml:ro
+        - ./scripts/upf-embb-start.sh:/scripts/upf-embb-start.sh:ro
+        - ./scripts/apply-slice-qos.sh:/scripts/apply-slice-qos.sh:ro
+      restart: *restart_policy
+      cpu_shares: 2048
+      deploy:
+        resources:
+          limits:
+            cpus: '0.50'
+            memory: 384M
+  
+    upf-urllc:
+      image: *open5gs_image
+      container_name: upf-urllc
+      profiles: ["core"]
+      mem_limit: 384m
+      cpus: 0.50
+      user: root
+      entrypoint: ["/bin/bash", "/scripts/upf-urllc-start.sh"]
+      privileged: true
+      cap_add:
+        - NET_ADMIN
+      devices:
+        - /dev/net/tun:/dev/net/tun
+      environment:
+        - IPV4_TUN_ADDR=10.46.0.1/16
+        - IPV4_TUN_SUBNET=10.46.0.0/16
+        - IPV6_TUN_ADDR=cafe::2/64
+        - ENABLE_NAT=true
+        - OGSTUN_TXQUEUELEN=512
+      networks:
+        br-5gcore:
+          ipv4_address: 172.20.0.101
+      volumes:
+        - ./config/upf-urllc.yaml:/opt/open5gs/etc/open5gs/upf-urllc.yaml:ro
+        - ./scripts/upf-urllc-start.sh:/scripts/upf-urllc-start.sh:ro
+        - ./scripts/apply-slice-qos.sh:/scripts/apply-slice-qos.sh:ro
+      restart: *restart_policy
+      cpu_shares: 2048
+      deploy:
+        resources:
+          limits:
+            cpus: '0.50'
+            memory: 384M
+  
+    gnb:
+      image: *ueransim_image
+      container_name: gnb
+      profiles: ["core"]
+      mem_limit: 256m
+      cpus: 0.35
+      entrypoint: ["nr-gnb", "-c", "/mnt/ueransim/gnb.yaml"]
+      networks:
+        br-5gcore:
+          ipv4_address: 172.20.1.10
+      volumes:
+        - ./config-ueransim:/mnt/ueransim
+      cap_add:
+        - NET_ADMIN
+      depends_on:
+        - amf
+      restart: *restart_policy
+      deploy:
+        resources:
+          limits:
+            cpus: '0.35'
+            memory: 256M
+  
+    ue-embb:
+      image: *ueransim_image
+      container_name: ue-embb
+      profiles: ["core"]
+      mem_limit: 128m
+      cpus: 0.20
+      entrypoint: ["nr-ue", "-c", "/mnt/ueransim/ue-embb.yaml"]
+      privileged: true
+      cap_add:
+        - NET_ADMIN
+      devices:
+        - /dev/net/tun:/dev/net/tun
+      networks:
+        - br-5gcore
+      volumes:
+        - ./config-ueransim:/mnt/ueransim
+      depends_on:
+        - gnb
+      restart: *restart_policy
+      deploy:
+        resources:
+          limits:
+            cpus: '0.20'
+            memory: 128M
+  
+    ue-urllc:
+      image: *ueransim_image
+      container_name: ue-urllc
+      profiles: ["core"]
+      mem_limit: 128m
+      cpus: 0.20
+      entrypoint: ["nr-ue", "-c", "/mnt/ueransim/ue-urllc.yaml"]
+      privileged: true
+      cap_add:
+        - NET_ADMIN
+      devices:
+        - /dev/net/tun:/dev/net/tun
+      networks:
+        - br-5gcore
+      volumes:
+        - ./config-ueransim:/mnt/ueransim
+      depends_on:
+        - gnb
+      restart: *restart_policy
+      deploy:
+        resources:
+          limits:
+            cpus: '0.20'
+            memory: 128M
+  
+    prometheus:
+      image: prom/prometheus:v2.54.1
+      container_name: prometheus
+      profiles: ["monitoring"]
+      mem_limit: 256m
+      cpus: 0.20
+      networks:
+        br-5gcore:
+          ipv4_address: 172.20.0.210
+      volumes:
+        - ./config/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+        - ./prometheus_data:/prometheus
+      ports:
+        - "9090:9090"
+      command:
+        - --config.file=/etc/prometheus/prometheus.yml
+        - --storage.tsdb.path=/prometheus
+        - --storage.tsdb.retention.time=6h
+      restart: *restart_policy
+      deploy:
+        resources:
+          limits:
+            cpus: '0.20'
+            memory: 256M
+  
+    grafana:
+      image: grafana/grafana:11.2.0
+      container_name: grafana
+      profiles: ["monitoring"]
+      mem_limit: 256m
+      cpus: 0.20
+      networks:
+        br-5gcore:
+          ipv4_address: 172.20.0.211
+      ports:
+        - "3000:3000"
+      environment:
+        - GF_SECURITY_ADMIN_USER=admin
+        - GF_SECURITY_ADMIN_PASSWORD=admin
+      volumes:
+        - ./grafana_data:/var/lib/grafana
+        - ./grafana/provisioning/datasources:/etc/grafana/provisioning/datasources:ro
+        - ./grafana/provisioning/dashboards:/etc/grafana/provisioning/dashboards:ro
+        - ./grafana/dashboards:/var/lib/grafana/dashboards:ro
+      depends_on:
+        - prometheus
+      restart: *restart_policy
+      deploy:
+        resources:
+          limits:
+            cpus: '0.20'
+            memory: 256M
+  
+    pushgateway:
+      image: prom/pushgateway:v1.9.0
+      container_name: pushgateway
+      profiles: ["monitoring"]
+      mem_limit: 64m
+      cpus: 0.10
+      networks:
+        br-5gcore:
+          ipv4_address: 172.20.0.212
+      ports:
+        - "9091:9091"
+      restart: *restart_policy
+      deploy:
+        resources:
+          limits:
+            cpus: '0.10'
+            memory: 64M
+  
+    node-exporter:
+      image: prom/node-exporter:v1.8.2
+      container_name: node-exporter
+      profiles: ["heavy-monitoring"]
+      mem_limit: 64m
+      cpus: 0.10
+      networks:
+        br-5gcore:
+          ipv4_address: 172.20.0.213
+      ports:
+        - "9100:9100"
+      command:
+        - --path.rootfs=/host
+      volumes:
+        - /:/host:ro,rslave
+      restart: *restart_policy
+      deploy:
+        resources:
+          limits:
+            cpus: '0.10'
+            memory: 64M
+  
+    cadvisor:
+      image: gcr.io/cadvisor/cadvisor:v0.49.1
+      container_name: cadvisor
+      profiles: ["heavy-monitoring"]
+      mem_limit: 128m
+      cpus: 0.15
+      networks:
+        br-5gcore:
+          ipv4_address: 172.20.0.214
+      privileged: true
+      healthcheck:
+        disable: true
+      volumes:
+        - /:/rootfs:ro
+        - /var/run:/var/run:ro
+        - /sys:/sys:ro
+        - /var/lib/docker/:/var/lib/docker:ro
+        - /dev/disk/:/dev/disk:ro
+      restart: *restart_policy
+      deploy:
+        resources:
+          limits:
+            cpus: '0.15'
+            memory: 128M
+  
+    webui:
+      image: gradiant/open5gs-webui:2.7.5
+      container_name: webui
+      profiles: ["webui"]
+      mem_limit: 128m
+      cpus: 0.15
+      depends_on:
+        mongo:
+          condition: service_healthy
+      environment:
+        - DB_URI=mongodb://mongo:27017/open5gs
+      networks:
+        br-5gcore:
+          ipv4_address: 172.20.0.200
+      ports:
+        - "9999:9999"
+      restart: *restart_policy
+      deploy:
+        resources:
+          limits:
+            cpus: '0.15'
+            memory: 128M
+  
+    embb-iperf-server:
+      image: networkstatic/iperf3:latest
+      container_name: embb-iperf-server
+      profiles: ["traffic"]
+      mem_limit: 96m
+      cpus: 0.20
+      command: ["-s", "-p", "5201"]
+      networks:
+        br-5gcore:
+          ipv4_address: 172.20.0.221
+      restart: *restart_policy
+      deploy:
+        resources:
+          limits:
+            cpus: '0.20'
+            memory: 96M
+  
+    urllc-iperf-server:
+      image: networkstatic/iperf3:latest
+      container_name: urllc-iperf-server
+      profiles: ["traffic"]
+      mem_limit: 64m
+      cpus: 0.15
+      command: ["-s", "-p", "5202"]
+      networks:
+        br-5gcore:
+          ipv4_address: 172.20.0.222
+      restart: *restart_policy
+      deploy:
+        resources:
+          limits:
+            cpus: '0.15'
+            memory: 64M
+  
+    mqtt-server:
+      image: eclipse-mosquitto:2.0.18
+      container_name: mqtt-server
+      profiles: ["traffic"]
+      mem_limit: 64m
+      cpus: 0.10
+      command: ["mosquitto", "-c", "/mosquitto-no-auth.conf"]
+      networks:
+        br-5gcore:
+          ipv4_address: 172.20.0.223
+      ports:
+        - "1883:1883"
+      restart: *restart_policy
+      deploy:
+        resources:
+          limits:
+            cpus: '0.10'
+            memory: 64M
 
-supi: 'imsi-901700000000001'
-mcc: '901'
-mnc: '70'
-key: '465B5CE8B199B49FAA5F0A2EE238A6BC'
-op: 'E8ED289DEBA952E4283B54E88E6183CA'
-opType: 'OPC'
-amf: '8000'
-imei: '356938035643801'
-imeiSv: '4370816125816151'
+---
+source: config/amf.yaml
+content: |
+  amf:
+    amf_name: open5gs-amf
+    sbi:
+      server:
+        - dev: eth0
+          port: 7777
+      client:
+        nrf:
+          - uri: http://nrf:7777
+        nssf:
+          - uri: http://nssf:7777
+    ngap:
+      server:
+        - dev: eth0
+    metrics:
+      server:
+        - dev: eth0
+          port: 9090
+    guami:
+      - plmn_id:
+          mcc: 901
+          mnc: 70
+        amf_id:
+          region: 2
+          set: 1
+    tai:
+      - plmn_id:
+          mcc: 901
+          mnc: 70
+        tac: 1
+    plmn_support:
+      - plmn_id:
+          mcc: 901
+          mnc: 70
+        s_nssai:
+          - sst: 1  # eMBB
+            sd: 0x000001
+          - sst: 2  # URLLC
+            sd: 0x000002
+    security:
+      integrity_order:
+        - NIA2
+        - NIA1
+        - NIA0
+      ciphering_order:
+        - NEA2
+        - NEA1
+        - NEA0
+    network_name:
+      full: Open5GS
+      short: Next
+    amf_name: open5gs-amf
+    time:
+      t3502:
+        value: 720
+      t3512:
+        value: 540
+    logger:
+      level: info
 
-# Dynamic gNB discovery
-gnbSearchList:
-  - gnb
+---
+source: config/ausf.yaml
+content: |
+  ausf:
+    sbi:
+      server:
+        - dev: eth0
+          port: 7777
+      client:
+        nrf:
+          - uri: http://nrf:7777
+    logger:
+      level: info
 
-uacAic:
-  mps: false
-  mcs: false
+---
+source: config/nrf.yaml
+content: |
+  nrf:
+    sbi:
+      server:
+        - dev: eth0
+          port: 7777
+    logger:
+      level: info
 
-uacAcc:
-  normalClass: 0
-  class11: false
-  class12: false
-  class13: false
-  class14: false
-  class15: false
+---
+source: config/nssf.yaml
+content: |
+  nssf:
+    sbi:
+      server:
+        - dev: eth0
+          port: 7777
+      client:
+        nrf:
+          - uri: http://nrf:7777
+        nsi:
+          - uri: http://nrf:7777
+            s_nssai:
+              sst: 1
+              sd: 000001
+          - uri: http://nrf:7777
+            s_nssai:
+              sst: 2
+              sd: 000002
+    nsi:
+      - uri: http://nrf:7777
+        s_nssai:
+          sst: 1
+          sd: 000001
+        tai:
+          plmn_id:
+            mcc: 901
+            mnc: 70
+          tac: 1
+      - uri: http://nrf:7777
+        s_nssai:
+          sst: 2
+          sd: 000002
+        tai:
+          plmn_id:
+            mcc: 901
+            mnc: 70
+          tac: 1
+    logger:
+      level: info
 
-sessions:
-  - type: 'IPv4'
-    apn: 'internet'
-    slice:
-      sst: 1
+---
+source: config/pcf.yaml
+content: |
+  pcf:
+    sbi:
+      server:
+        - dev: eth0
+          port: 7777
+      client:
+        nrf:
+          - uri: http://nrf:7777
+    metrics:
+      server:
+        - dev: eth0
+          port: 9090
+    policy:
+      - plmn_id:
+          mcc: 901
+          mnc: 70
+        slice:
+          - sst: 1
+            sd: 0x000001
+            default_indicator: true
+            session:
+              - name: internet
+                type: 3
+                qos:
+                  index: 9
+                  arp:
+                    priority_level: 8
+                    pre_emption_capability: 1
+                    pre_emption_vulnerability: 1
+                ambr:
+                  downlink:
+                    value: 200
+                    unit: 2
+                  uplink:
+                    value: 100
+                    unit: 2
+          - sst: 2
+            sd: 0x000002
+            session:
+              - name: internet2
+                type: 3
+                qos:
+                  index: 82
+                  arp:
+                    priority_level: 2
+                    pre_emption_capability: 1
+                    pre_emption_vulnerability: 2
+                ambr:
+                  downlink:
+                    value: 50
+                    unit: 2
+                  uplink:
+                    value: 50
+                    unit: 2
+
+---
+source: config/prometheus.yml
+content: |
+  global:
+    scrape_interval: 15s
+    evaluation_interval: 15s
+    external_labels:
+      monitor: '5g-network-monitor'
+  
+  scrape_configs:
+    - job_name: 'node-exporter'
+      static_configs:
+        - targets: ['node-exporter:9100']
+          labels:
+            group: 'infrastructure'
+  
+    - job_name: 'cadvisor'
+      static_configs:
+        - targets: ['cadvisor:8080']
+          labels:
+            group: 'containers'
+  
+    - job_name: 'amf'
+      static_configs:
+        - targets: ['amf:9090']
+          labels:
+            group: '5g-core'
+            function: 'amf'
+  
+    - job_name: 'smf'
+      static_configs:
+        - targets: ['smf:9090']
+          labels:
+            group: '5g-core'
+            function: 'smf'
+  
+    - job_name: 'upf-embb'
+      static_configs:
+        - targets: ['upf-embb:9090']
+          labels:
+            group: '5g-upf'
+            slice: 'embb'
+  
+    - job_name: 'upf-urllc'
+      static_configs:
+        - targets: ['upf-urllc:9090']
+          labels:
+            group: '5g-upf'
+            slice: 'urllc'
+  
+    - job_name: 'pcf'
+      static_configs:
+        - targets: ['pcf:9090']
+          labels:
+            group: '5g-core'
+            function: 'pcf'
+    - job_name: 'pushgateway'
+      honor_labels: true
+      static_configs:
+        - targets: ['pushgateway:9091']
+          labels:
+            group: '5g-upf-metrics'
+
+---
+source: config/smf.yaml
+content: |
+  smf:
+    sbi:
+      server:
+        - dev: eth0
+          port: 7777
+      client:
+        nrf:
+          - uri: http://nrf:7777
+    pfcp:
+      server:
+        - dev: eth0
+      client:
+        upf:
+          - address: upf-embb
+            dnn: internet
+          - address: upf-urllc
+            dnn: internet2
+    gtpc:
+      server:
+        - dev: eth0
+    gtpu:
+      server:
+        - dev: eth0
+    metrics:
+      server:
+        - dev: eth0
+          port: 9090
+    session:
+      - subnet: 10.45.0.0/16
+        gateway: 10.45.0.1
+        dnn: internet
+      - subnet: 10.46.0.0/16
+        gateway: 10.46.0.1
+        dnn: internet2
+    dns:
+      - 8.8.8.8
+      - 8.8.4.4
+    mtu: 1400
+    ctf:
+      enabled: auto
+    info:
+      - s_nssai:
+          - sst: 1
+            sd: 000001
+            dnn:
+              - internet
+          - sst: 2
+            sd: 000002
+            dnn:
+              - internet2
+
+---
+source: config/udm.yaml
+content: |
+  udm:
+    sbi:
+      server:
+        - dev: eth0
+          port: 7777
+      client:
+        nrf:
+          - uri: http://nrf:7777
+        udr:
+          - uri: http://udr:7777
+    logger:
+      level: info
+
+---
+source: config/udr.yaml
+content: |
+  udr:
+    sbi:
+      server:
+        - dev: eth0
+          port: 7777
+      client:
+        nrf:
+          - uri: http://nrf:7777
+    mongodb:
+      name: open5gs
+      url: mongodb://mongo:27017/open5gs
+    logger:
+      level: info
+    global:
+      max:
+        ue: 2048
+
+---
+source: config/upf-embb.yaml
+content: |
+  upf:
+    pfcp:
+      server:
+        - dev: eth0
+    gtpu:
+      server:
+        - dev: eth0
+    session:
+      - subnet: 10.45.0.0/16
+        gateway: 10.45.0.1
+        dnn: internet
+    metrics:
+      server:
+        - dev: eth0
+          port: 9090
+    logger:
+      level: info
+
+---
+source: config/upf-urllc.yaml
+content: |
+  upf:
+    pfcp:
+      server:
+        - dev: eth0
+    gtpu:
+      server:
+        - dev: eth0
+    session:
+      - subnet: 10.46.0.0/16
+        gateway: 10.46.0.1
+        dnn: internet2
+    metrics:
+      server:
+        - dev: eth0
+          port: 9090
+    logger:
+      level: info
+
+---
+source: config-ueransim/gnb.yaml
+content: |
+  mcc: '901'
+  mnc: '70'
+  nci: '0x000000010'
+  idLength: 32
+  tac: 1
+  
+  # gNB sử dụng IP tĩnh 172.20.1.10
+  linkIp: 172.20.1.10
+  ngapIp: 172.20.1.10
+  gtpIp: 172.20.1.10
+  
+  # AMF configuration - kết nối tới AMF IP tĩnh
+  amfConfigs:
+    - address: 172.20.0.20
+      port: 38412
+  
+  # Hỗ trợ 2 slices: eMBB, URLLC
+  slices:
+    - sst: 1  # eMBB - Enhanced Mobile Broadband
       sd: 0x000001
-
-configured-nssai:
-  - sst: 1
-    sd: 0x000001
-
-default-nssai:
-  - sst: 1
-    sd: 0x000001
-
-integrity:
-  IA1: true
-  IA2: true
-  IA3: true
-
-ciphering:
-  EA1: true
-  EA2: true
-  EA3: true
-
-integrityMaxRate:
-  uplink: 'full'
-  downlink: 'full'
-
-# Source: config-ueransim/ue-urllc.yaml
----
-# UE Configuration for URLLC (Ultra-Reliable Low-Latency Communications)
-# Use case: Autonomous vehicles, Industrial automation, Remote surgery
-
-supi: 'imsi-901700000000002'
-mcc: '901'
-mnc: '70'
-key: '465B5CE8B199B49FAA5F0A2EE238A6BC'
-op: 'E8ED289DEBA952E4283B54E88E6183CA'
-opType: 'OPC'
-amf: '8000'
-imei: '356938035643802'
-imeiSv: '4370816125816152'
-
-# Dynamic gNB discovery
-gnbSearchList:
-  - gnb
-
-uacAic:
-  mps: true  # Mission critical
-  mcs: true
-
-uacAcc:
-  normalClass: 0
-  class11: false
-  class12: false
-  class13: false
-  class14: false
-  class15: false
-
-sessions:
-  - type: 'IPv4'
-    apn: 'internet2'
-    slice:
-      sst: 2
+    - sst: 2  # URLLC - Ultra-Reliable Low-Latency
       sd: 0x000002
+  
+  ignoreStreamIds: true
 
-configured-nssai:
-  - sst: 2
-    sd: 0x000002
+---
+source: config-ueransim/ue-embb.yaml
+content: |
+  # UE Configuration for eMBB (Enhanced Mobile Broadband)
+  # Use case: 4K/8K video streaming, AR/VR, Cloud gaming
+  
+  supi: 'imsi-901700000000001'
+  mcc: '901'
+  mnc: '70'
+  key: '465B5CE8B199B49FAA5F0A2EE238A6BC'
+  op: 'E8ED289DEBA952E4283B54E88E6183CA'
+  opType: 'OPC'
+  amf: '8000'
+  imei: '356938035643801'
+  imeiSv: '4370816125816151'
+  
+  # Dynamic gNB discovery
+  gnbSearchList:
+    - gnb
+  
+  uacAic:
+    mps: false
+    mcs: false
+  
+  uacAcc:
+    normalClass: 0
+    class11: false
+    class12: false
+    class13: false
+    class14: false
+    class15: false
+  
+  sessions:
+    - type: 'IPv4'
+      apn: 'internet'
+      slice:
+        sst: 1
+        sd: 0x000001
+  
+  configured-nssai:
+    - sst: 1
+      sd: 0x000001
+  
+  default-nssai:
+    - sst: 1
+      sd: 0x000001
+  
+  integrity:
+    IA1: true
+    IA2: true
+    IA3: true
+  
+  ciphering:
+    EA1: true
+    EA2: true
+    EA3: true
+  
+  integrityMaxRate:
+    uplink: 'full'
+    downlink: 'full'
 
-default-nssai:
-  - sst: 2
-    sd: 0x000002
+---
+source: config-ueransim/ue-urllc.yaml
+content: |
+  # UE Configuration for URLLC (Ultra-Reliable Low-Latency Communications)
+  # Use case: Autonomous vehicles, Industrial automation, Remote surgery
+  
+  supi: 'imsi-901700000000002'
+  mcc: '901'
+  mnc: '70'
+  key: '465B5CE8B199B49FAA5F0A2EE238A6BC'
+  op: 'E8ED289DEBA952E4283B54E88E6183CA'
+  opType: 'OPC'
+  amf: '8000'
+  imei: '356938035643802'
+  imeiSv: '4370816125816152'
+  
+  # Dynamic gNB discovery
+  gnbSearchList:
+    - gnb
+  
+  uacAic:
+    mps: true  # Mission critical
+    mcs: true
+  
+  uacAcc:
+    normalClass: 0
+    class11: false
+    class12: false
+    class13: false
+    class14: false
+    class15: false
+  
+  sessions:
+    - type: 'IPv4'
+      apn: 'internet2'
+      slice:
+        sst: 2
+        sd: 0x000002
+  
+  configured-nssai:
+    - sst: 2
+      sd: 0x000002
+  
+  default-nssai:
+    - sst: 2
+      sd: 0x000002
+  
+  integrity:
+    IA1: true
+    IA2: true
+    IA3: true
+  
+  ciphering:
+    EA1: true
+    EA2: true
+    EA3: true
+  
+  integrityMaxRate:
+    uplink: 'full'
+    downlink: 'full'
 
-integrity:
-  IA1: true
-  IA2: true
-  IA3: true
+---
+source: grafana/provisioning/dashboards/dashboards.yml
+content: |
+  apiVersion: 1
+  
+  providers:
+    - name: 5g-slicing
+      orgId: 1
+      folder: 5G Lab
+      type: file
+      disableDeletion: false
+      updateIntervalSeconds: 10
+      allowUiUpdates: true
+      options:
+        path: /var/lib/grafana/dashboards
 
-ciphering:
-  EA1: true
-  EA2: true
-  EA3: true
+---
+source: grafana/provisioning/datasources/prometheus.yml
+content: |
+  apiVersion: 1
+  
+  datasources:
+    - name: Prometheus
+      type: prometheus
+      access: proxy
+      url: http://prometheus:9090
+      uid: prometheus
+      isDefault: true
+      editable: true
 
-integrityMaxRate:
-  uplink: 'full'
-  downlink: 'full'
+---
+source: grafana-dashboard-5g.json
+content: |
+  {
+    "dashboard": {
+      "title": "5G Network Slicing - eMBB vs URLLC",
+      "tags": ["5g", "network-slicing"],
+      "timezone": "browser",
+      "panels": [
+        {
+          "id": 1,
+          "title": "eMBB Throughput (Mbps)",
+          "type": "graph",
+          "gridPos": {"h": 8, "w": 12, "x": 0, "y": 0},
+          "targets": [
+            {
+              "expr": "rate(fivegs_ep_n3_gtp_indatapktn3upf{job=\"upf-embb\"}[1m])",
+              "legendFormat": "eMBB Incoming Packets",
+              "refId": "A"
+            },
+            {
+              "expr": "rate(fivegs_ep_n3_gtp_outdatapktn3upf{job=\"upf-embb\"}[1m])",
+              "legendFormat": "eMBB Outgoing Packets",
+              "refId": "B"
+            }
+          ],
+          "yaxes": [
+            {"format": "Mbits", "label": "Throughput"},
+            {"format": "short"}
+          ]
+        },
+        {
+          "id": 2,
+          "title": "URLLC Throughput (Mbps)",
+          "type": "graph",
+          "gridPos": {"h": 8, "w": 12, "x": 12, "y": 0},
+          "targets": [
+            {
+              "expr": "rate(fivegs_ep_n3_gtp_indatapktn3upf{job=\"upf-urllc\"}[1m])",
+              "legendFormat": "URLLC Incoming Packets",
+              "refId": "A"
+            },
+            {
+              "expr": "rate(fivegs_ep_n3_gtp_outdatapktn3upf{job=\"upf-urllc\"}[1m])",
+              "legendFormat": "URLLC Outgoing Packets",
+              "refId": "B"
+            }
+          ],
+          "yaxes": [
+            {"format": "Mbits", "label": "Throughput"},
+            {"format": "short"}
+          ]
+        },
+        {
+          "id": 3,
+          "title": "Active Sessions",
+          "type": "stat",
+          "gridPos": {"h": 4, "w": 6, "x": 0, "y": 8},
+          "targets": [
+            {
+              "expr": "fivegs_upffunction_upf_sessionnbr{job=\"upf-embb\"}",
+              "legendFormat": "eMBB Sessions",
+              "refId": "A"
+            }
+          ],
+          "options": {
+            "colorMode": "value",
+            "graphMode": "area"
+          }
+        },
+        {
+          "id": 4,
+          "title": "URLLC Sessions",
+          "type": "stat",
+          "gridPos": {"h": 4, "w": 6, "x": 6, "y": 8},
+          "targets": [
+            {
+              "expr": "fivegs_upffunction_upf_sessionnbr{job=\"upf-urllc\"}",
+              "legendFormat": "URLLC Sessions",
+              "refId": "A"
+            }
+          ],
+          "options": {
+            "colorMode": "value",
+            "graphMode": "area"
+          }
+        },
+        {
+          "id": 5,
+          "title": "Throughput Comparison",
+          "type": "graph",
+          "gridPos": {"h": 8, "w": 12, "x": 12, "y": 8},
+          "targets": [
+            {
+              "expr": "fivegs_upffunction_upf_sessionnbr",
+              "legendFormat": "{{job}}",
+              "refId": "A"
+            }
+          ],
+          "yaxes": [
+            {"format": "Mbits", "label": "Throughput"},
+            {"format": "short"}
+          ]
+        },
+        {
+          "id": 6,
+          "title": "Packet Errors",
+          "type": "graph",
+          "gridPos": {"h": 6, "w": 12, "x": 0, "y": 12},
+          "targets": [
+            {
+              "expr": "fivegs_upffunction_upf_qosflows",
+              "legendFormat": "{{job}} - {{dnn}}",
+              "refId": "A"
+            }
+          ]
+        }
+      ],
+      "refresh": "15s",
+      "time": {"from": "now-15m", "to": "now"},
+      "timepicker": {"refresh_intervals": ["15s", "30s", "1m", "5m"]}
+    }
+  }
+
+---
+source: grafana-5g-slicing-dashboard.json
+content: |
+  {
+    "title": "5G Network Slicing - QoS Monitor",
+    "uid": "5g-slicing-qos",
+    "timezone": "browser",
+    "refresh": "15s",
+    "time": { "from": "now-15m", "to": "now" },
+    "panels": [
+      {
+        "id": 1,
+        "title": "Active UEs",
+        "type": "stat",
+        "gridPos": { "x": 0, "y": 0, "w": 4, "h": 4 },
+        "targets": [{
+          "datasource": "prometheus",
+          "expr": "ues_active",
+          "legendFormat": "UEs"
+        }],
+        "options": {
+          "colorMode": "background",
+          "graphMode": "none",
+          "textMode": "auto"
+        },
+        "fieldConfig": {
+          "defaults": {
+            "color": { "mode": "thresholds" },
+            "thresholds": {
+              "steps": [
+                { "color": "red", "value": 0 },
+                { "color": "green", "value": 1 }
+              ]
+            }
+          }
+        }
+      },
+      {
+        "id": 2,
+        "title": "Active PFCP Sessions",
+        "type": "stat",
+        "gridPos": { "x": 4, "y": 0, "w": 4, "h": 4 },
+        "targets": [{
+          "datasource": "prometheus",
+          "expr": "pfcp_sessions_active",
+          "legendFormat": "Sessions"
+        }],
+        "options": {
+          "colorMode": "background",
+          "graphMode": "none"
+        },
+        "fieldConfig": {
+          "defaults": {
+            "color": { "mode": "thresholds" },
+            "thresholds": {
+              "steps": [
+                { "color": "red", "value": 0 },
+                { "color": "green", "value": 1 }
+              ]
+            }
+          }
+        }
+      },
+      {
+        "id": 3,
+        "title": "eMBB Slice Sessions (SST:1)",
+        "type": "stat",
+        "gridPos": { "x": 8, "y": 0, "w": 4, "h": 4 },
+        "targets": [{
+          "datasource": "prometheus",
+          "expr": "fivegs_smffunction_sm_sessionnbr{snssai=~\"1-.*\"}",
+          "legendFormat": "eMBB"
+        }],
+        "options": { "colorMode": "background", "graphMode": "none" },
+        "fieldConfig": {
+          "defaults": {
+            "color": { "mode": "thresholds" },
+            "thresholds": {
+              "steps": [
+                { "color": "red", "value": 0 },
+                { "color": "blue", "value": 1 }
+              ]
+            }
+          }
+        }
+      },
+      {
+        "id": 4,
+        "title": "URLLC Slice Sessions (SST:2)",
+        "type": "stat",
+        "gridPos": { "x": 12, "y": 0, "w": 4, "h": 4 },
+        "targets": [{
+          "datasource": "prometheus",
+          "expr": "fivegs_smffunction_sm_sessionnbr{snssai=~\"2-.*\"}",
+          "legendFormat": "URLLC"
+        }],
+        "options": { "colorMode": "background", "graphMode": "none" },
+        "fieldConfig": {
+          "defaults": {
+            "color": { "mode": "thresholds" },
+            "thresholds": {
+              "steps": [
+                { "color": "red", "value": 0 },
+                { "color": "orange", "value": 1 }
+              ]
+            }
+          }
+        }
+      },
+      {
+        "id": 5,
+        "title": "UPF QoS Flows per Slice",
+        "type": "bargauge",
+        "gridPos": { "x": 16, "y": 0, "w": 8, "h": 4 },
+        "targets": [
+          {
+            "datasource": "prometheus",
+            "expr": "fivegs_upffunction_upf_qosflows{dnn=\"internet\"}",
+            "legendFormat": "eMBB (DNN: internet)"
+          },
+          {
+            "datasource": "prometheus",
+            "expr": "fivegs_upffunction_upf_qosflows{dnn=\"internet2\"}",
+            "legendFormat": "URLLC (DNN: internet2)"
+          }
+        ],
+        "options": { "orientation": "horizontal" },
+        "fieldConfig": {
+          "defaults": {
+            "color": { "mode": "palette-classic" }
+          }
+        }
+      },
+      {
+        "id": 6,
+        "title": "SMF Sessions theo Slice (Timeline)",
+        "type": "timeseries",
+        "gridPos": { "x": 0, "y": 4, "w": 12, "h": 8 },
+        "targets": [
+          {
+            "datasource": "prometheus",
+            "expr": "fivegs_smffunction_sm_sessionnbr{snssai=~\"1-.*\"}",
+            "legendFormat": "eMBB SST:1"
+          },
+          {
+            "datasource": "prometheus",
+            "expr": "fivegs_smffunction_sm_sessionnbr{snssai=~\"2-.*\"}",
+            "legendFormat": "URLLC SST:2"
+          }
+        ],
+        "fieldConfig": {
+          "defaults": {
+            "custom": { "lineWidth": 2, "fillOpacity": 10 },
+            "color": { "mode": "palette-classic" }
+          }
+        },
+        "options": { "legend": { "displayMode": "list", "placement": "bottom" } }
+      },
+      {
+        "id": 7,
+        "title": "PFCP Sessions Active (Timeline)",
+        "type": "timeseries",
+        "gridPos": { "x": 12, "y": 4, "w": 12, "h": 8 },
+        "targets": [
+          {
+            "datasource": "prometheus",
+            "expr": "pfcp_sessions_active",
+            "legendFormat": "PFCP Sessions"
+          },
+          {
+            "datasource": "prometheus",
+            "expr": "ues_active",
+            "legendFormat": "Active UEs"
+          }
+        ],
+        "fieldConfig": {
+          "defaults": {
+            "custom": { "lineWidth": 2, "fillOpacity": 10 },
+            "color": { "mode": "palette-classic" }
+          }
+        }
+      },
+      {
+        "id": 8,
+        "title": "UPF eMBB - GTP Packets (N3 Interface)",
+        "type": "timeseries",
+        "gridPos": { "x": 0, "y": 12, "w": 12, "h": 8 },
+        "targets": [
+          {
+            "datasource": "prometheus",
+            "expr": "rate(fivegs_ep_n3_gtp_indatapktn3upf[1m])",
+            "legendFormat": "eMBB RX packets/s"
+          },
+          {
+            "datasource": "prometheus",
+            "expr": "rate(fivegs_ep_n3_gtp_outdatapktn3upf[1m])",
+            "legendFormat": "eMBB TX packets/s"
+          }
+        ],
+        "fieldConfig": {
+          "defaults": {
+            "unit": "pps",
+            "custom": { "lineWidth": 2, "fillOpacity": 10 },
+            "color": { "mode": "palette-classic" }
+          }
+        }
+      },
+      {
+        "id": 9,
+        "title": "UPF URLLC - GTP Packets (N3 Interface)",
+        "type": "timeseries",
+        "gridPos": { "x": 12, "y": 12, "w": 12, "h": 8 },
+        "targets": [
+          {
+            "datasource": "prometheus",
+            "expr": "rate(fivegs_ep_n3_gtp_indatapktn3upf[1m])",
+            "legendFormat": "URLLC RX packets/s"
+          },
+          {
+            "datasource": "prometheus",
+            "expr": "rate(fivegs_ep_n3_gtp_outdatapktn3upf[1m])",
+            "legendFormat": "URLLC TX packets/s"
+          }
+        ],
+        "fieldConfig": {
+          "defaults": {
+            "unit": "pps",
+            "custom": { "lineWidth": 2, "fillOpacity": 10 },
+            "color": { "mode": "palette-classic" }
+          }
+        }
+      },
+      {
+        "id": 10,
+        "title": "N4 Session Establishments",
+        "type": "timeseries",
+        "gridPos": { "x": 0, "y": 20, "w": 24, "h": 8 },
+        "targets": [
+          {
+            "datasource": "prometheus",
+            "expr": "fivegs_upffunction_sm_n4sessionestabreq",
+            "legendFormat": "eMBB N4 Session Req"
+          },
+          {
+            "datasource": "prometheus",
+            "expr": "fivegs_upffunction_sm_n4sessionestabreq",
+            "legendFormat": "URLLC N4 Session Req"
+          }
+        ],
+        "fieldConfig": {
+          "defaults": {
+            "custom": { "lineWidth": 2, "fillOpacity": 10 },
+            "color": { "mode": "palette-classic" }
+          }
+        }
+      }
+    ],
+    "schemaVersion": 38,
+    "version": 1
+  }
+
+---
+source: grafana-bandwidth-dashboard.json
+content: |
+  {
+    "title": "5G Network Slicing - Bandwidth Monitor",
+    "uid": "5g-bandwidth",
+    "timezone": "browser",
+    "refresh": "15s",
+    "time": { "from": "now-15m", "to": "now" },
+    "panels": [
+      {
+        "id": 1,
+        "title": "eMBB TX Bandwidth (Mbps)",
+        "type": "stat",
+        "gridPos": { "x": 0, "y": 0, "w": 6, "h": 4 },
+        "targets": [{
+          "datasource": "prometheus",
+          "expr": "rate(upf_embb_tx_bytes_total{job=\"upf-embb\"}[30s]) * 8 / 1000000",
+          "legendFormat": "eMBB TX Mbps"
+        }],
+        "fieldConfig": {
+          "defaults": {
+            "unit": "Mbps",
+            "decimals": 2,
+            "color": { "mode": "thresholds" },
+            "thresholds": {
+              "steps": [
+                { "color": "green", "value": 0 },
+                { "color": "yellow", "value": 50 },
+                { "color": "red", "value": 90 }
+              ]
+            }
+          }
+        },
+        "options": { "colorMode": "background", "graphMode": "area" }
+      },
+      {
+        "id": 2,
+        "title": "eMBB RX Bandwidth (Mbps)",
+        "type": "stat",
+        "gridPos": { "x": 6, "y": 0, "w": 6, "h": 4 },
+        "targets": [{
+          "datasource": "prometheus",
+          "expr": "rate(upf_embb_rx_bytes_total{job=\"upf-embb\"}[30s]) * 8 / 1000000",
+          "legendFormat": "eMBB RX Mbps"
+        }],
+        "fieldConfig": {
+          "defaults": {
+            "unit": "Mbps",
+            "decimals": 2,
+            "color": { "mode": "thresholds" },
+            "thresholds": {
+              "steps": [
+                { "color": "blue", "value": 0 },
+                { "color": "yellow", "value": 50 },
+                { "color": "red", "value": 90 }
+              ]
+            }
+          }
+        },
+        "options": { "colorMode": "background", "graphMode": "area" }
+      },
+      {
+        "id": 3,
+        "title": "URLLC TX Bandwidth (Mbps)",
+        "type": "stat",
+        "gridPos": { "x": 12, "y": 0, "w": 6, "h": 4 },
+        "targets": [{
+          "datasource": "prometheus",
+          "expr": "rate(upf_urllc_tx_bytes_total{job=\"upf-urllc\"}[30s]) * 8 / 1000000",
+          "legendFormat": "URLLC TX Mbps"
+        }],
+        "fieldConfig": {
+          "defaults": {
+            "unit": "Mbps",
+            "decimals": 2,
+            "color": { "mode": "thresholds" },
+            "thresholds": {
+              "steps": [
+                { "color": "green", "value": 0 },
+                { "color": "yellow", "value": 25 },
+                { "color": "red", "value": 45 }
+              ]
+            }
+          }
+        },
+        "options": { "colorMode": "background", "graphMode": "area" }
+      },
+      {
+        "id": 4,
+        "title": "URLLC RX Bandwidth (Mbps)",
+        "type": "stat",
+        "gridPos": { "x": 18, "y": 0, "w": 6, "h": 4 },
+        "targets": [{
+          "datasource": "prometheus",
+          "expr": "rate(upf_urllc_rx_bytes_total{job=\"upf-urllc\"}[30s]) * 8 / 1000000",
+          "legendFormat": "URLLC RX Mbps"
+        }],
+        "fieldConfig": {
+          "defaults": {
+            "unit": "Mbps",
+            "decimals": 2,
+            "color": { "mode": "thresholds" },
+            "thresholds": {
+              "steps": [
+                { "color": "orange", "value": 0 },
+                { "color": "yellow", "value": 25 },
+                { "color": "red", "value": 45 }
+              ]
+            }
+          }
+        },
+        "options": { "colorMode": "background", "graphMode": "area" }
+      },
+      {
+        "id": 5,
+        "title": "Bandwidth So Sánh 2 Slice - TX (Mbps)",
+        "type": "timeseries",
+        "gridPos": { "x": 0, "y": 4, "w": 24, "h": 8 },
+        "targets": [
+          {
+            "datasource": "prometheus",
+            "expr": "rate(upf_embb_tx_bytes_total{job=\"upf-embb\"}[30s]) * 8 / 1000000",
+            "legendFormat": "eMBB TX (max 100Mbps)"
+          },
+          {
+            "datasource": "prometheus",
+            "expr": "rate(upf_urllc_tx_bytes_total{job=\"upf-urllc\"}[30s]) * 8 / 1000000",
+            "legendFormat": "URLLC TX (max 50Mbps)"
+          }
+        ],
+        "fieldConfig": {
+          "defaults": {
+            "unit": "Mbps",
+            "decimals": 2,
+            "custom": { "lineWidth": 2, "fillOpacity": 15 },
+            "color": { "mode": "palette-classic" }
+          }
+        },
+        "options": {
+          "legend": { "displayMode": "list", "placement": "bottom" },
+          "tooltip": { "mode": "multi" }
+        }
+      },
+      {
+        "id": 6,
+        "title": "Bandwidth So Sánh 2 Slice - RX (Mbps)",
+        "type": "timeseries",
+        "gridPos": { "x": 0, "y": 12, "w": 24, "h": 8 },
+        "targets": [
+          {
+            "datasource": "prometheus",
+            "expr": "rate(upf_embb_rx_bytes_total{job=\"upf-embb\"}[30s]) * 8 / 1000000",
+            "legendFormat": "eMBB RX"
+          },
+          {
+            "datasource": "prometheus",
+            "expr": "rate(upf_urllc_rx_bytes_total{job=\"upf-urllc\"}[30s]) * 8 / 1000000",
+            "legendFormat": "URLLC RX"
+          }
+        ],
+        "fieldConfig": {
+          "defaults": {
+            "unit": "Mbps",
+            "decimals": 2,
+            "custom": { "lineWidth": 2, "fillOpacity": 15 },
+            "color": { "mode": "palette-classic" }
+          }
+        },
+        "options": {
+          "legend": { "displayMode": "list", "placement": "bottom" },
+          "tooltip": { "mode": "multi" }
+        }
+      },
+      {
+        "id": 7,
+        "title": "Total Data Volume - eMBB vs URLLC (MB)",
+        "type": "timeseries",
+        "gridPos": { "x": 0, "y": 20, "w": 12, "h": 8 },
+        "targets": [
+          {
+            "datasource": "prometheus",
+            "expr": "upf_embb_tx_bytes_total{job=\"upf-embb\"} / 1000000",
+            "legendFormat": "eMBB Total TX (MB)"
+          },
+          {
+            "datasource": "prometheus",
+            "expr": "upf_urllc_tx_bytes_total{job=\"upf-urllc\"} / 1000000",
+            "legendFormat": "URLLC Total TX (MB)"
+          }
+        ],
+        "fieldConfig": {
+          "defaults": {
+            "unit": "MB",
+            "decimals": 2,
+            "custom": { "lineWidth": 2, "fillOpacity": 10 },
+            "color": { "mode": "palette-classic" }
+          }
+        }
+      },
+      {
+        "id": 8,
+        "title": "Active UEs & Sessions",
+        "type": "timeseries",
+        "gridPos": { "x": 12, "y": 20, "w": 12, "h": 8 },
+        "targets": [
+          {
+            "datasource": "prometheus",
+            "expr": "ues_active",
+            "legendFormat": "Active UEs"
+          },
+          {
+            "datasource": "prometheus",
+            "expr": "pfcp_sessions_active",
+            "legendFormat": "PFCP Sessions"
+          },
+          {
+            "datasource": "prometheus",
+            "expr": "fivegs_smffunction_sm_sessionnbr{snssai=~\"1-.*\"}",
+            "legendFormat": "eMBB Sessions"
+          },
+          {
+            "datasource": "prometheus",
+            "expr": "fivegs_smffunction_sm_sessionnbr{snssai=~\"2-.*\"}",
+            "legendFormat": "URLLC Sessions"
+          }
+        ],
+        "fieldConfig": {
+          "defaults": {
+            "custom": { "lineWidth": 2, "fillOpacity": 10 },
+            "color": { "mode": "palette-classic" }
+          }
+        }
+      }
+    ],
+    "schemaVersion": 38,
+    "version": 1
+  }
+
+---
+source: grafana/dashboards/5g-network-slicing.json
+content: |
+  {
+    "annotations": {
+      "list": [
+        {
+          "builtIn": 1,
+          "datasource": {
+            "type": "grafana",
+            "uid": "-- Grafana --"
+          },
+          "enable": true,
+          "hide": true,
+          "iconColor": "rgba(0, 211, 255, 1)",
+          "name": "Annotations & Alerts",
+          "type": "dashboard"
+        }
+      ]
+    },
+    "editable": true,
+    "fiscalYearStartMonth": 0,
+    "graphTooltip": 1,
+    "id": null,
+    "links": [],
+    "liveNow": true,
+    "panels": [
+      {
+        "datasource": {
+          "type": "prometheus",
+          "uid": "prometheus"
+        },
+        "fieldConfig": {
+          "defaults": {
+            "color": {
+              "mode": "thresholds"
+            },
+            "mappings": [],
+            "thresholds": {
+              "mode": "absolute",
+              "steps": [
+                {
+                  "color": "red",
+                  "value": null
+                },
+                {
+                  "color": "green",
+                  "value": 1
+                }
+              ]
+            },
+            "unit": "short"
+          },
+          "overrides": []
+        },
+        "gridPos": {
+          "h": 4,
+          "w": 6,
+          "x": 0,
+          "y": 0
+        },
+        "id": 1,
+        "options": {
+          "colorMode": "background",
+          "graphMode": "none",
+          "justifyMode": "center",
+          "orientation": "auto",
+          "reduceOptions": {
+            "calcs": [
+              "lastNotNull"
+            ],
+            "fields": "",
+            "values": false
+          },
+          "textMode": "auto",
+          "wideLayout": true
+        },
+        "pluginVersion": "11.0.0",
+        "targets": [
+          {
+            "datasource": {
+              "type": "prometheus",
+              "uid": "prometheus"
+            },
+            "expr": "up{job=\"upf-embb\"}",
+            "legendFormat": "UPF eMBB",
+            "refId": "A"
+          }
+        ],
+        "title": "UPF eMBB",
+        "type": "stat"
+      },
+      {
+        "datasource": {
+          "type": "prometheus",
+          "uid": "prometheus"
+        },
+        "fieldConfig": {
+          "defaults": {
+            "color": {
+              "mode": "thresholds"
+            },
+            "mappings": [],
+            "thresholds": {
+              "mode": "absolute",
+              "steps": [
+                {
+                  "color": "red",
+                  "value": null
+                },
+                {
+                  "color": "green",
+                  "value": 1
+                }
+              ]
+            },
+            "unit": "short"
+          },
+          "overrides": []
+        },
+        "gridPos": {
+          "h": 4,
+          "w": 6,
+          "x": 6,
+          "y": 0
+        },
+        "id": 2,
+        "options": {
+          "colorMode": "background",
+          "graphMode": "none",
+          "justifyMode": "center",
+          "orientation": "auto",
+          "reduceOptions": {
+            "calcs": [
+              "lastNotNull"
+            ],
+            "fields": "",
+            "values": false
+          },
+          "textMode": "auto",
+          "wideLayout": true
+        },
+        "pluginVersion": "11.0.0",
+        "targets": [
+          {
+            "datasource": {
+              "type": "prometheus",
+              "uid": "prometheus"
+            },
+            "expr": "up{job=\"upf-urllc\"}",
+            "legendFormat": "UPF uRLLC",
+            "refId": "A"
+          }
+        ],
+        "title": "UPF uRLLC",
+        "type": "stat"
+      },
+      {
+        "datasource": {
+          "type": "prometheus",
+          "uid": "prometheus"
+        },
+        "fieldConfig": {
+          "defaults": {
+            "color": {
+              "mode": "palette-classic"
+            },
+            "custom": {
+              "axisBorderShow": false,
+              "axisCenteredZero": false,
+              "axisColorMode": "text",
+              "axisLabel": "Mbps",
+              "axisPlacement": "auto",
+              "barAlignment": 0,
+              "drawStyle": "line",
+              "fillOpacity": 18,
+              "gradientMode": "opacity",
+              "hideFrom": {
+                "legend": false,
+                "tooltip": false,
+                "viz": false
+              },
+              "insertNulls": false,
+              "lineInterpolation": "smooth",
+              "lineWidth": 2,
+              "pointSize": 5,
+              "scaleDistribution": {
+                "type": "linear"
+              },
+              "showPoints": "never",
+              "spanNulls": true,
+              "stacking": {
+                "group": "A",
+                "mode": "none"
+              },
+              "thresholdsStyle": {
+                "mode": "off"
+              }
+            },
+            "mappings": [],
+            "min": 0,
+            "thresholds": {
+              "mode": "absolute",
+              "steps": [
+                {
+                  "color": "green",
+                  "value": null
+                }
+              ]
+            },
+            "unit": "Mbits"
+          },
+          "overrides": []
+        },
+        "gridPos": {
+          "h": 9,
+          "w": 12,
+          "x": 0,
+          "y": 4
+        },
+        "id": 3,
+        "options": {
+          "legend": {
+            "calcs": [
+              "lastNotNull",
+              "max",
+              "mean"
+            ],
+            "displayMode": "table",
+            "placement": "bottom",
+            "showLegend": true
+          },
+          "tooltip": {
+            "mode": "multi",
+            "sort": "desc"
+          }
+        },
+        "targets": [
+          {
+            "datasource": {
+              "type": "prometheus",
+              "uid": "prometheus"
+            },
+            "expr": "rate(upf_embb_rx_bytes_total{job=\"upf-embb\"}[30s]) * 8 / 1000000",
+            "legendFormat": "eMBB RX",
+            "refId": "A"
+          },
+          {
+            "datasource": {
+              "type": "prometheus",
+              "uid": "prometheus"
+            },
+            "expr": "rate(upf_embb_tx_bytes_total{job=\"upf-embb\"}[30s]) * 8 / 1000000",
+            "legendFormat": "eMBB TX",
+            "refId": "B"
+          }
+        ],
+        "title": "eMBB Throughput",
+        "type": "timeseries"
+      },
+      {
+        "datasource": {
+          "type": "prometheus",
+          "uid": "prometheus"
+        },
+        "fieldConfig": {
+          "defaults": {
+            "color": {
+              "mode": "palette-classic"
+            },
+            "custom": {
+              "axisBorderShow": false,
+              "axisCenteredZero": false,
+              "axisColorMode": "text",
+              "axisLabel": "Mbps",
+              "axisPlacement": "auto",
+              "barAlignment": 0,
+              "drawStyle": "line",
+              "fillOpacity": 18,
+              "gradientMode": "opacity",
+              "hideFrom": {
+                "legend": false,
+                "tooltip": false,
+                "viz": false
+              },
+              "insertNulls": false,
+              "lineInterpolation": "smooth",
+              "lineWidth": 2,
+              "pointSize": 5,
+              "scaleDistribution": {
+                "type": "linear"
+              },
+              "showPoints": "never",
+              "spanNulls": true,
+              "stacking": {
+                "group": "A",
+                "mode": "none"
+              },
+              "thresholdsStyle": {
+                "mode": "off"
+              }
+            },
+            "mappings": [],
+            "min": 0,
+            "thresholds": {
+              "mode": "absolute",
+              "steps": [
+                {
+                  "color": "green",
+                  "value": null
+                }
+              ]
+            },
+            "unit": "Mbits"
+          },
+          "overrides": []
+        },
+        "gridPos": {
+          "h": 9,
+          "w": 12,
+          "x": 12,
+          "y": 4
+        },
+        "id": 4,
+        "options": {
+          "legend": {
+            "calcs": [
+              "lastNotNull",
+              "max",
+              "mean"
+            ],
+            "displayMode": "table",
+            "placement": "bottom",
+            "showLegend": true
+          },
+          "tooltip": {
+            "mode": "multi",
+            "sort": "desc"
+          }
+        },
+        "targets": [
+          {
+            "datasource": {
+              "type": "prometheus",
+              "uid": "prometheus"
+            },
+            "expr": "rate(upf_urllc_rx_bytes_total{job=\"upf-urllc\"}[30s]) * 8 / 1000000",
+            "legendFormat": "uRLLC RX",
+            "refId": "A"
+          },
+          {
+            "datasource": {
+              "type": "prometheus",
+              "uid": "prometheus"
+            },
+            "expr": "rate(upf_urllc_tx_bytes_total{job=\"upf-urllc\"}[30s]) * 8 / 1000000",
+            "legendFormat": "uRLLC TX",
+            "refId": "B"
+          }
+        ],
+        "title": "uRLLC Throughput",
+        "type": "timeseries"
+      },
+      {
+        "datasource": {
+          "type": "prometheus",
+          "uid": "prometheus"
+        },
+        "fieldConfig": {
+          "defaults": {
+            "color": {
+              "mode": "palette-classic"
+            },
+            "custom": {
+              "axisBorderShow": false,
+              "axisCenteredZero": false,
+              "axisColorMode": "text",
+              "axisLabel": "Mbps",
+              "axisPlacement": "auto",
+              "barAlignment": 0,
+              "drawStyle": "line",
+              "fillOpacity": 12,
+              "gradientMode": "opacity",
+              "hideFrom": {
+                "legend": false,
+                "tooltip": false,
+                "viz": false
+              },
+              "insertNulls": false,
+              "lineInterpolation": "smooth",
+              "lineWidth": 2,
+              "pointSize": 5,
+              "scaleDistribution": {
+                "type": "linear"
+              },
+              "showPoints": "never",
+              "spanNulls": true,
+              "stacking": {
+                "group": "A",
+                "mode": "none"
+              },
+              "thresholdsStyle": {
+                "mode": "off"
+              }
+            },
+            "mappings": [],
+            "min": 0,
+            "thresholds": {
+              "mode": "absolute",
+              "steps": [
+                {
+                  "color": "green",
+                  "value": null
+                }
+              ]
+            },
+            "unit": "Mbits"
+          },
+          "overrides": []
+        },
+        "gridPos": {
+          "h": 9,
+          "w": 24,
+          "x": 0,
+          "y": 13
+        },
+        "id": 5,
+        "options": {
+          "legend": {
+            "calcs": [
+              "lastNotNull",
+              "max",
+              "mean"
+            ],
+            "displayMode": "table",
+            "placement": "bottom",
+            "showLegend": true
+          },
+          "tooltip": {
+            "mode": "multi",
+            "sort": "desc"
+          }
+        },
+        "targets": [
+          {
+            "datasource": {
+              "type": "prometheus",
+              "uid": "prometheus"
+            },
+            "expr": "rate(upf_embb_rx_bytes_total{job=\"upf-embb\"}[30s]) * 8 / 1000000",
+            "legendFormat": "eMBB RX",
+            "refId": "A"
+          },
+          {
+            "datasource": {
+              "type": "prometheus",
+              "uid": "prometheus"
+            },
+            "expr": "rate(upf_urllc_rx_bytes_total{job=\"upf-urllc\"}[30s]) * 8 / 1000000",
+            "legendFormat": "uRLLC RX",
+            "refId": "B"
+          }
+        ],
+        "title": "Slice Comparison",
+        "type": "timeseries"
+      }
+    ],
+    "refresh": "15s",
+    "schemaVersion": 39,
+    "tags": [
+      "5g",
+      "network-slicing",
+      "open5gs"
+    ],
+    "templating": {
+      "list": []
+    },
+    "time": {
+      "from": "now-15m",
+      "to": "now"
+    },
+    "timepicker": {},
+    "timezone": "browser",
+    "title": "5G Network Slicing",
+    "uid": "5g-network-slicing",
+    "version": 1,
+    "weekStart": ""
+  }

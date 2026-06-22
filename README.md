@@ -104,6 +104,50 @@ When the setup is stable, change `.env` to:
 RESTART_POLICY=unless-stopped
 ```
 
+## Ubuntu VM 5GB Mode
+
+Recommended VM resources:
+
+- RAM: 5GB.
+- CPU: 2 cores.
+- Ubuntu swap: 4GB.
+
+The default `.env` keeps the lab in `core` profile only. This is the intended mode for Phase 1 debugging: verify core, verify UE registration, verify routes, and verify slice path. Do not enable `monitoring`, `heavy-monitoring`, `webui`, or `traffic` while debugging Phase 1 unless you need that specific component.
+
+Run the lightweight core:
+
+```bash
+docker compose down
+docker compose up -d
+```
+
+Check host/container pressure:
+
+```bash
+docker ps
+free -h
+docker stats
+bash ./check-5g.sh
+```
+
+Only start traffic servers when running tests:
+
+```bash
+docker compose --profile traffic up -d embb-iperf-server urllc-iperf-server
+```
+
+Stop optional traffic services after testing:
+
+```bash
+docker compose stop embb-iperf-server urllc-iperf-server mqtt-server
+```
+
+Or stop all optional/heavy services:
+
+```bash
+bash scripts/stop-heavy.sh
+```
+
 ## Health Check
 
 ```bash

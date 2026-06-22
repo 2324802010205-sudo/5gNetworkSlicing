@@ -17,6 +17,8 @@ services:
     container_name: mongo
     profiles: ["core"]
     restart: *restart_policy
+    mem_limit: 256m
+    cpus: 0.30
     command: ["mongod", "--bind_ip_all"]
     networks:
       br-5gcore:
@@ -32,13 +34,15 @@ services:
     deploy:
       resources:
         limits:
-          cpus: '0.5'
-          memory: 512M
+          cpus: '0.30'
+          memory: 256M
 
   nrf:
     image: *open5gs_image
     container_name: nrf
     profiles: ["core"]
+    mem_limit: 96m
+    cpus: 0.15
     command: open5gs-nrfd -c /opt/open5gs/etc/open5gs/nrf.yaml
     depends_on:
       mongo:
@@ -52,13 +56,15 @@ services:
     deploy:
       resources:
         limits:
-          cpus: '0.25'
-          memory: 192M
+          cpus: '0.15'
+          memory: 96M
 
   nssf:
     image: *open5gs_image
     container_name: nssf
     profiles: ["core"]
+    mem_limit: 96m
+    cpus: 0.15
     command: open5gs-nssfd -c /opt/open5gs/etc/open5gs/nssf.yaml
     depends_on:
       - nrf
@@ -71,13 +77,15 @@ services:
     deploy:
       resources:
         limits:
-          cpus: '0.2'
-          memory: 192M
+          cpus: '0.15'
+          memory: 96M
 
   amf:
     image: *open5gs_image
     container_name: amf
     profiles: ["core"]
+    mem_limit: 192m
+    cpus: 0.25
     command: open5gs-amfd -c /opt/open5gs/etc/open5gs/amf.yaml
     depends_on:
       - nrf
@@ -91,13 +99,15 @@ services:
     deploy:
       resources:
         limits:
-          cpus: '0.4'
-          memory: 384M
+          cpus: '0.25'
+          memory: 192M
 
   smf:
     image: *open5gs_image
     container_name: smf
     profiles: ["core"]
+    mem_limit: 192m
+    cpus: 0.25
     command: open5gs-smfd -c /opt/open5gs/etc/open5gs/smf.yaml
     depends_on:
       - nrf
@@ -110,13 +120,15 @@ services:
     deploy:
       resources:
         limits:
-          cpus: '0.4'
-          memory: 384M
+          cpus: '0.25'
+          memory: 192M
 
   ausf:
     image: *open5gs_image
     container_name: ausf
     profiles: ["core"]
+    mem_limit: 96m
+    cpus: 0.10
     command: open5gs-ausfd -c /opt/open5gs/etc/open5gs/ausf.yaml
     depends_on:
       - nrf
@@ -129,13 +141,15 @@ services:
     deploy:
       resources:
         limits:
-          cpus: '0.2'
-          memory: 192M
+          cpus: '0.10'
+          memory: 96M
 
   udm:
     image: *open5gs_image
     container_name: udm
     profiles: ["core"]
+    mem_limit: 96m
+    cpus: 0.10
     command: open5gs-udmd -c /opt/open5gs/etc/open5gs/udm.yaml
     depends_on:
       - nrf
@@ -148,13 +162,15 @@ services:
     deploy:
       resources:
         limits:
-          cpus: '0.2'
-          memory: 192M
+          cpus: '0.10'
+          memory: 96M
 
   udr:
     image: *open5gs_image
     container_name: udr
     profiles: ["core"]
+    mem_limit: 128m
+    cpus: 0.15
     command: open5gs-udrd -c /opt/open5gs/etc/open5gs/udr.yaml
     depends_on:
       - mongo
@@ -168,13 +184,15 @@ services:
     deploy:
       resources:
         limits:
-          cpus: '0.2'
-          memory: 192M
+          cpus: '0.15'
+          memory: 128M
 
   pcf:
     image: *open5gs_image
     container_name: pcf
     profiles: ["core"]
+    mem_limit: 96m
+    cpus: 0.10
     command: open5gs-pcfd -c /opt/open5gs/etc/open5gs/pcf.yaml
     depends_on:
       - nrf
@@ -187,13 +205,15 @@ services:
     deploy:
       resources:
         limits:
-          cpus: '0.2'
-          memory: 192M
+          cpus: '0.10'
+          memory: 96M
 
   upf-embb:
     image: *open5gs_image
     container_name: upf-embb
     profiles: ["core"]
+    mem_limit: 384m
+    cpus: 0.50
     user: root
     entrypoint: ["/bin/bash", "/scripts/upf-embb-start.sh"]
     privileged: true
@@ -219,13 +239,15 @@ services:
     deploy:
       resources:
         limits:
-          cpus: '1.0'
-          memory: 768M
+          cpus: '0.50'
+          memory: 384M
 
   upf-urllc:
     image: *open5gs_image
     container_name: upf-urllc
     profiles: ["core"]
+    mem_limit: 384m
+    cpus: 0.50
     user: root
     entrypoint: ["/bin/bash", "/scripts/upf-urllc-start.sh"]
     privileged: true
@@ -251,13 +273,15 @@ services:
     deploy:
       resources:
         limits:
-          cpus: '1.0'
-          memory: 768M
+          cpus: '0.50'
+          memory: 384M
 
   gnb:
     image: *ueransim_image
     container_name: gnb
     profiles: ["core"]
+    mem_limit: 256m
+    cpus: 0.35
     entrypoint: ["nr-gnb", "-c", "/mnt/ueransim/gnb.yaml"]
     networks:
       br-5gcore:
@@ -273,12 +297,14 @@ services:
       resources:
         limits:
           cpus: '0.35'
-          memory: 384M
+          memory: 256M
 
   ue-embb:
     image: *ueransim_image
     container_name: ue-embb
     profiles: ["core"]
+    mem_limit: 128m
+    cpus: 0.20
     entrypoint: ["nr-ue", "-c", "/mnt/ueransim/ue-embb.yaml"]
     privileged: true
     cap_add:
@@ -295,13 +321,15 @@ services:
     deploy:
       resources:
         limits:
-          cpus: '0.25'
-          memory: 192M
+          cpus: '0.20'
+          memory: 128M
 
   ue-urllc:
     image: *ueransim_image
     container_name: ue-urllc
     profiles: ["core"]
+    mem_limit: 128m
+    cpus: 0.20
     entrypoint: ["nr-ue", "-c", "/mnt/ueransim/ue-urllc.yaml"]
     privileged: true
     cap_add:
@@ -318,13 +346,15 @@ services:
     deploy:
       resources:
         limits:
-          cpus: '0.25'
-          memory: 192M
+          cpus: '0.20'
+          memory: 128M
 
   prometheus:
     image: prom/prometheus:v2.54.1
     container_name: prometheus
     profiles: ["monitoring"]
+    mem_limit: 256m
+    cpus: 0.20
     networks:
       br-5gcore:
         ipv4_address: 172.20.0.210
@@ -341,13 +371,15 @@ services:
     deploy:
       resources:
         limits:
-          cpus: '0.35'
-          memory: 384M
+          cpus: '0.20'
+          memory: 256M
 
   grafana:
     image: grafana/grafana:11.2.0
     container_name: grafana
     profiles: ["monitoring"]
+    mem_limit: 256m
+    cpus: 0.20
     networks:
       br-5gcore:
         ipv4_address: 172.20.0.211
@@ -367,13 +399,15 @@ services:
     deploy:
       resources:
         limits:
-          cpus: '0.35'
-          memory: 384M
+          cpus: '0.20'
+          memory: 256M
 
   pushgateway:
     image: prom/pushgateway:v1.9.0
     container_name: pushgateway
     profiles: ["monitoring"]
+    mem_limit: 64m
+    cpus: 0.10
     networks:
       br-5gcore:
         ipv4_address: 172.20.0.212
@@ -383,13 +417,15 @@ services:
     deploy:
       resources:
         limits:
-          cpus: '0.15'
-          memory: 96M
+          cpus: '0.10'
+          memory: 64M
 
   node-exporter:
     image: prom/node-exporter:v1.8.2
     container_name: node-exporter
     profiles: ["heavy-monitoring"]
+    mem_limit: 64m
+    cpus: 0.10
     networks:
       br-5gcore:
         ipv4_address: 172.20.0.213
@@ -403,13 +439,15 @@ services:
     deploy:
       resources:
         limits:
-          cpus: '0.15'
-          memory: 96M
+          cpus: '0.10'
+          memory: 64M
 
   cadvisor:
     image: gcr.io/cadvisor/cadvisor:v0.49.1
     container_name: cadvisor
     profiles: ["heavy-monitoring"]
+    mem_limit: 128m
+    cpus: 0.15
     networks:
       br-5gcore:
         ipv4_address: 172.20.0.214
@@ -426,13 +464,15 @@ services:
     deploy:
       resources:
         limits:
-          cpus: '0.25'
-          memory: 192M
+          cpus: '0.15'
+          memory: 128M
 
   webui:
     image: gradiant/open5gs-webui:2.7.5
     container_name: webui
     profiles: ["webui"]
+    mem_limit: 128m
+    cpus: 0.15
     depends_on:
       mongo:
         condition: service_healthy
@@ -447,13 +487,15 @@ services:
     deploy:
       resources:
         limits:
-          cpus: '0.25'
-          memory: 192M
+          cpus: '0.15'
+          memory: 128M
 
   embb-iperf-server:
     image: networkstatic/iperf3:latest
     container_name: embb-iperf-server
     profiles: ["traffic"]
+    mem_limit: 96m
+    cpus: 0.20
     command: ["-s", "-p", "5201"]
     networks:
       br-5gcore:
@@ -462,13 +504,15 @@ services:
     deploy:
       resources:
         limits:
-          cpus: '0.5'
-          memory: 128M
+          cpus: '0.20'
+          memory: 96M
 
   urllc-iperf-server:
     image: networkstatic/iperf3:latest
     container_name: urllc-iperf-server
     profiles: ["traffic"]
+    mem_limit: 64m
+    cpus: 0.15
     command: ["-s", "-p", "5202"]
     networks:
       br-5gcore:
@@ -477,13 +521,15 @@ services:
     deploy:
       resources:
         limits:
-          cpus: '0.25'
-          memory: 96M
+          cpus: '0.15'
+          memory: 64M
 
   mqtt-server:
     image: eclipse-mosquitto:2.0.18
     container_name: mqtt-server
     profiles: ["traffic"]
+    mem_limit: 64m
+    cpus: 0.10
     command: ["mosquitto", "-c", "/mosquitto-no-auth.conf"]
     networks:
       br-5gcore:
@@ -494,5 +540,5 @@ services:
     deploy:
       resources:
         limits:
-          cpus: '0.15'
+          cpus: '0.10'
           memory: 64M
