@@ -2,7 +2,7 @@
   "title": "5G Network Slicing - Bandwidth Monitor",
   "uid": "5g-bandwidth",
   "timezone": "browser",
-  "refresh": "5s",
+  "refresh": "15s",
   "time": { "from": "now-15m", "to": "now" },
   "panels": [
     {
@@ -12,7 +12,7 @@
       "gridPos": { "x": 0, "y": 0, "w": 6, "h": 4 },
       "targets": [{
         "datasource": "prometheus",
-        "expr": "rate(upf_embb_tx_bytes[30s]) * 8 / 1000000",
+        "expr": "rate(upf_embb_tx_bytes_total{job=\"upf-embb\"}[30s]) * 8 / 1000000",
         "legendFormat": "eMBB TX Mbps"
       }],
       "fieldConfig": {
@@ -38,7 +38,7 @@
       "gridPos": { "x": 6, "y": 0, "w": 6, "h": 4 },
       "targets": [{
         "datasource": "prometheus",
-        "expr": "rate(upf_embb_rx_bytes[30s]) * 8 / 1000000",
+        "expr": "rate(upf_embb_rx_bytes_total{job=\"upf-embb\"}[30s]) * 8 / 1000000",
         "legendFormat": "eMBB RX Mbps"
       }],
       "fieldConfig": {
@@ -64,7 +64,7 @@
       "gridPos": { "x": 12, "y": 0, "w": 6, "h": 4 },
       "targets": [{
         "datasource": "prometheus",
-        "expr": "rate(upf_urllc_tx_bytes[30s]) * 8 / 1000000",
+        "expr": "rate(upf_urllc_tx_bytes_total{job=\"upf-urllc\"}[30s]) * 8 / 1000000",
         "legendFormat": "URLLC TX Mbps"
       }],
       "fieldConfig": {
@@ -90,7 +90,7 @@
       "gridPos": { "x": 18, "y": 0, "w": 6, "h": 4 },
       "targets": [{
         "datasource": "prometheus",
-        "expr": "rate(upf_urllc_rx_bytes[30s]) * 8 / 1000000",
+        "expr": "rate(upf_urllc_rx_bytes_total{job=\"upf-urllc\"}[30s]) * 8 / 1000000",
         "legendFormat": "URLLC RX Mbps"
       }],
       "fieldConfig": {
@@ -117,12 +117,12 @@
       "targets": [
         {
           "datasource": "prometheus",
-          "expr": "rate(upf_embb_tx_bytes[30s]) * 8 / 1000000",
+          "expr": "rate(upf_embb_tx_bytes_total{job=\"upf-embb\"}[30s]) * 8 / 1000000",
           "legendFormat": "eMBB TX (max 100Mbps)"
         },
         {
           "datasource": "prometheus",
-          "expr": "rate(upf_urllc_tx_bytes[30s]) * 8 / 1000000",
+          "expr": "rate(upf_urllc_tx_bytes_total{job=\"upf-urllc\"}[30s]) * 8 / 1000000",
           "legendFormat": "URLLC TX (max 50Mbps)"
         }
       ],
@@ -147,12 +147,12 @@
       "targets": [
         {
           "datasource": "prometheus",
-          "expr": "rate(upf_embb_rx_bytes[30s]) * 8 / 1000000",
+          "expr": "rate(upf_embb_rx_bytes_total{job=\"upf-embb\"}[30s]) * 8 / 1000000",
           "legendFormat": "eMBB RX"
         },
         {
           "datasource": "prometheus",
-          "expr": "rate(upf_urllc_rx_bytes[30s]) * 8 / 1000000",
+          "expr": "rate(upf_urllc_rx_bytes_total{job=\"upf-urllc\"}[30s]) * 8 / 1000000",
           "legendFormat": "URLLC RX"
         }
       ],
@@ -177,12 +177,12 @@
       "targets": [
         {
           "datasource": "prometheus",
-          "expr": "upf_embb_tx_bytes / 1000000",
+          "expr": "upf_embb_tx_bytes_total{job=\"upf-embb\"} / 1000000",
           "legendFormat": "eMBB Total TX (MB)"
         },
         {
           "datasource": "prometheus",
-          "expr": "upf_urllc_tx_bytes / 1000000",
+          "expr": "upf_urllc_tx_bytes_total{job=\"upf-urllc\"} / 1000000",
           "legendFormat": "URLLC Total TX (MB)"
         }
       ],

@@ -2,7 +2,7 @@
 set -eu
 
 PUSHGW="${PUSHGW:-http://localhost:9091}"
-INTERVAL="${INTERVAL:-5}"
+INTERVAL="${INTERVAL:-15}"
 
 while true; do
     EMBB_RX=$(docker exec upf-embb awk '$1 ~ /ogstun:/ {print $2}' /proc/net/dev)
@@ -17,7 +17,13 @@ while true; do
       '# HELP upf_embb_tx_bytes_total eMBB UPF transmitted bytes on ogstun' \
       '# TYPE upf_embb_tx_bytes_total counter' \
       "upf_embb_tx_bytes_total ${EMBB_TX:-0}" \
-      | curl -fsS --data-binary @- "$PUSHGW/metrics/job/upf_embb" >/dev/null
+      '# HELP upf_ogstun_rx_bytes_total UPF received bytes on ogstun' \
+      '# TYPE upf_ogstun_rx_bytes_total counter' \
+      "upf_ogstun_rx_bytes_total{slice=\"embb\",upf=\"upf-embb\"} ${EMBB_RX:-0}" \
+      '# HELP upf_ogstun_tx_bytes_total UPF transmitted bytes on ogstun' \
+      '# TYPE upf_ogstun_tx_bytes_total counter' \
+      "upf_ogstun_tx_bytes_total{slice=\"embb\",upf=\"upf-embb\"} ${EMBB_TX:-0}" \
+      | curl -fsS --data-binary @- "$PUSHGW/metrics/job/upf-embb" >/dev/null
 
     printf '%s\n' \
       '# HELP upf_urllc_rx_bytes_total URLLC UPF received bytes on ogstun' \
@@ -26,7 +32,13 @@ while true; do
       '# HELP upf_urllc_tx_bytes_total URLLC UPF transmitted bytes on ogstun' \
       '# TYPE upf_urllc_tx_bytes_total counter' \
       "upf_urllc_tx_bytes_total ${URLLC_TX:-0}" \
-      | curl -fsS --data-binary @- "$PUSHGW/metrics/job/upf_urllc" >/dev/null
+      '# HELP upf_ogstun_rx_bytes_total UPF received bytes on ogstun' \
+      '# TYPE upf_ogstun_rx_bytes_total counter' \
+      "upf_ogstun_rx_bytes_total{slice=\"urllc\",upf=\"upf-urllc\"} ${URLLC_RX:-0}" \
+      '# HELP upf_ogstun_tx_bytes_total UPF transmitted bytes on ogstun' \
+      '# TYPE upf_ogstun_tx_bytes_total counter' \
+      "upf_ogstun_tx_bytes_total{slice=\"urllc\",upf=\"upf-urllc\"} ${URLLC_TX:-0}" \
+      | curl -fsS --data-binary @- "$PUSHGW/metrics/job/upf-urllc" >/dev/null
 
     sleep "$INTERVAL"
 done

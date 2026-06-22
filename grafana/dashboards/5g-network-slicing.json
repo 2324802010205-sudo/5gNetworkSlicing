@@ -238,7 +238,7 @@
             "type": "prometheus",
             "uid": "prometheus"
           },
-          "expr": "rate(upf_embb_rx_bytes_total{job=\"upf_embb\"}[30s]) * 8 / 1000000",
+          "expr": "rate(upf_embb_rx_bytes_total{job=\"upf-embb\"}[30s]) * 8 / 1000000",
           "legendFormat": "eMBB RX",
           "refId": "A"
         },
@@ -247,7 +247,7 @@
             "type": "prometheus",
             "uid": "prometheus"
           },
-          "expr": "rate(upf_embb_tx_bytes_total{job=\"upf_embb\"}[30s]) * 8 / 1000000",
+          "expr": "rate(upf_embb_tx_bytes_total{job=\"upf-embb\"}[30s]) * 8 / 1000000",
           "legendFormat": "eMBB TX",
           "refId": "B"
         }
@@ -341,7 +341,7 @@
             "type": "prometheus",
             "uid": "prometheus"
           },
-          "expr": "rate(upf_urllc_rx_bytes_total{job=\"upf_urllc\"}[30s]) * 8 / 1000000",
+          "expr": "rate(upf_urllc_rx_bytes_total{job=\"upf-urllc\"}[30s]) * 8 / 1000000",
           "legendFormat": "uRLLC RX",
           "refId": "A"
         },
@@ -350,7 +350,7 @@
             "type": "prometheus",
             "uid": "prometheus"
           },
-          "expr": "rate(upf_urllc_tx_bytes_total{job=\"upf_urllc\"}[30s]) * 8 / 1000000",
+          "expr": "rate(upf_urllc_tx_bytes_total{job=\"upf-urllc\"}[30s]) * 8 / 1000000",
           "legendFormat": "uRLLC TX",
           "refId": "B"
         }
@@ -444,7 +444,7 @@
             "type": "prometheus",
             "uid": "prometheus"
           },
-          "expr": "rate(upf_embb_rx_bytes_total{job=\"upf_embb\"}[30s]) * 8 / 1000000",
+          "expr": "rate(upf_embb_rx_bytes_total{job=\"upf-embb\"}[30s]) * 8 / 1000000",
           "legendFormat": "eMBB RX",
           "refId": "A"
         },
@@ -453,7 +453,7 @@
             "type": "prometheus",
             "uid": "prometheus"
           },
-          "expr": "rate(upf_urllc_rx_bytes_total{job=\"upf_urllc\"}[30s]) * 8 / 1000000",
+          "expr": "rate(upf_urllc_rx_bytes_total{job=\"upf-urllc\"}[30s]) * 8 / 1000000",
           "legendFormat": "uRLLC RX",
           "refId": "B"
         }
@@ -462,7 +462,7 @@
       "type": "timeseries"
     }
   ],
-  "refresh": "5s",
+  "refresh": "15s",
   "schemaVersion": 39,
   "tags": [
     "5g",

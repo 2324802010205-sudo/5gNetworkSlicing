@@ -2,7 +2,7 @@
   "title": "5G Network Slicing - QoS Monitor",
   "uid": "5g-slicing-qos",
   "timezone": "browser",
-  "refresh": "5s",
+  "refresh": "15s",
   "time": { "from": "now-15m", "to": "now" },
   "panels": [
     {

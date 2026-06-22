@@ -1,0 +1,38 @@
+nssf:
+  sbi:
+    server:
+      - dev: eth0
+        port: 7777
+    client:
+      nrf:
+        - uri: http://nrf:7777
+      nsi:
+        - uri: http://nrf:7777
+          s_nssai:
+            sst: 1
+            sd: 000001
+        - uri: http://nrf:7777
+          s_nssai:
+            sst: 2
+            sd: 000002
+  nsi:
+    - uri: http://nrf:7777
+      s_nssai:
+        sst: 1
+        sd: 000001
+      tai:
+        plmn_id:
+          mcc: 901
+          mnc: 70
+        tac: 1
+    - uri: http://nrf:7777
+      s_nssai:
+        sst: 2
+        sd: 000002
+      tai:
+        plmn_id:
+          mcc: 901
+          mnc: 70
+        tac: 1
+  logger:
+    level: info

@@ -113,8 +113,8 @@
         ]
       }
     ],
-    "refresh": "5s",
+    "refresh": "15s",
     "time": {"from": "now-15m", "to": "now"},
-    "timepicker": {"refresh_intervals": ["5s", "10s", "30s", "1m"]}
+    "timepicker": {"refresh_intervals": ["15s", "30s", "1m", "5m"]}
   }
 }

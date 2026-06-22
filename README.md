@@ -1,240 +1,276 @@
 # 5G Network Slicing Lab
 
-Open5GS + UERANSIM + Docker Compose lab for two slices:
+Docker Compose lab for Open5GS 2.7.5 + UERANSIM 3.2.6 with two research slices:
 
-- eMBB: SST 1, SD 000001, DNN `internet`, subnet `10.45.0.0/16`
-- uRLLC: SST 2, SD 000002, DNN `internet2`, subnet `10.46.0.0/16`
+- eMBB: UE `ue-embb`, DNN `internet`, S-NSSAI `SST=1, SD=000001`, subnet `10.45.0.0/16`.
+- URLLC: UE `ue-urllc`, DNN `internet2`, S-NSSAI `SST=2, SD=000002`, subnet `10.46.0.0/16`.
 
-## Requirements
+The goal is not only to draw nice Grafana charts. The lab is shaped to prove resource optimization behavior: when eMBB creates heavy broadband load, URLLC should keep latency/loss inside SLA after static or dynamic allocation is applied.
 
-- Ubuntu 22.04 or WSL2 with Linux containers
-- Docker and Docker Compose
-- At least 8 GB RAM and 4 CPU cores
-- Host IP forwarding/NAT enabled if UEs need internet access
+## What Is Real 5G Slicing In This Lab?
 
-## Start
+The real slicing part of this lab is the control-plane and user-plane separation that Open5GS can represent locally:
+
+- eMBB UE requests S-NSSAI `SST=1, SD=000001` with DNN `internet`.
+- URLLC UE requests S-NSSAI `SST=2, SD=000002` with DNN `internet2`.
+- AMF advertises both supported S-NSSAI values.
+- SMF maps the DNN/S-NSSAI sessions to the intended UPFs.
+- `upf-embb` and `upf-urllc` are isolated user-plane functions with separate UE subnets and tunnel gateways.
+
+In this lab, a slice is considered correctly demonstrated only when the UE obtains the intended `uesimtun0` address, the route used by the traffic goes through `uesimtun0`, and packets are observed on the expected UPF.
+
+## What Is Testbed Emulation/Proxy?
+
+The Linux `tc`, `netem`, HTB, and `fq_codel` policies in this project are testbed shaping tools. They emulate resource pressure, queueing behavior, and latency/loss effects so the experiment can compare policies on a small VM.
+
+They are not native 3GPP QoS enforcement through PFCP QER. Do not interpret the lab as proving that network slicing automatically creates low latency for URLLC. Low latency in this setup comes from the selected testbed policy, shaping, and allocator behavior.
+
+## Refactor Summary
+
+This project was refactored to run lighter on Ubuntu VM/MacBook Air M1 and to better support the eMBB + URLLC research goal.
+
+Main changes:
+
+- Docker Compose now uses profiles: `core`, `monitoring`, `heavy-monitoring`, `traffic`, and `webui`.
+- `.env` makes `core` the default profile, so `docker compose up -d` no longer starts Prometheus, Grafana, cAdvisor, or node-exporter by default.
+- Restart policy is controlled by `RESTART_POLICY` and defaults to `on-failure:3` for easier debugging.
+- Monitoring images are pinned instead of using `latest`.
+- Grafana plugin auto-install was removed to reduce startup time and network dependency.
+- Prometheus scrape/evaluation interval was raised from `5s` to `15s`.
+- Grafana dashboard refresh was raised from `5s` to `15s`.
+- NSSF was added with two configured slices: eMBB `SST=1, SD=000001` and URLLC `SST=2, SD=000002`.
+- AMF was configured to use NRF and NSSF while SMF still maps DNN/S-NSSAI to the two UPFs.
+- Pushgateway custom UPF metrics were aligned with Prometheus job labels `upf-embb` and `upf-urllc`.
+- Traffic scripts were added for eMBB TCP, URLLC UDP small packets, and mixed contention.
+- A SLA-aware dynamic allocator was added using Linux `tc` HTB + `fq_codel`, not Deep Reinforcement Learning.
+- `check-5g.sh` was rewritten to focus on core health and treat monitoring/traffic services as optional.
+- `ALL_CONFIGS_FULL.md` was regenerated so the combined config snapshot matches the refactored project.
+
+Important files added or changed:
+
+- `.env`: default profiles and restart policy.
+- `docker-compose.yaml`: profile-based lightweight service layout.
+- `config/nssf.yaml`: NSSF configuration for two slices.
+- `config/amf.yaml`: AMF client configuration for NSSF.
+- `config/prometheus.yml`: lighter scrape settings and consistent jobs.
+- `scripts/push-metrics.sh`: custom UPF byte counters through Pushgateway.
+- `scripts/test-embb.sh`: eMBB TCP throughput test.
+- `scripts/test-urllc.sh`: URLLC UDP small-packet test.
+- `scripts/test-mixed.sh`: simultaneous eMBB load and URLLC test.
+- `scripts/controller/sla_dynamic_allocator.py`: dynamic SLA-aware resource allocator.
+- `check-5g.sh`: PASS/WARN/FAIL health check.
+- `README.md`: updated runbook and research explanation.
+
+## Components
+
+- UE: simulated user device from UERANSIM. `ue-embb` models video/cloud traffic; `ue-urllc` models robot/sensor traffic.
+- gNB: simulated 5G base station that connects both UEs to the AMF.
+- AMF: handles registration, mobility, and access control. It is configured with both S-NSSAI values.
+- NSSF: slice selection function. This project includes `config/nssf.yaml` with both eMBB and URLLC slices and registers it through NRF.
+- SMF: maps sessions to UPF by DNN/S-NSSAI: `internet` to `upf-embb`, `internet2` to `upf-urllc`.
+- UPF: user-plane forwarding. `upf-embb` owns `10.45.0.1/16`; `upf-urllc` owns `10.46.0.1/16`.
+- MongoDB: stores Open5GS subscriber/configuration data. It does not carry or store video/robot traffic.
+- Prometheus/Grafana: optional monitoring profile. Keep it off while debugging core registration on a small VM.
+
+If NSSF causes Open5GS compatibility issues in your environment, you can temporarily remove `nssf` from the AMF dependency/client and keep the current DNN/S-NSSAI-to-SMF/UPF model. In that fallback, document the result as slicing by SMF+UPF policy, not a full NSSF-driven deployment.
+
+## Lightweight Profiles
+
+`.env` sets:
+
+```bash
+COMPOSE_PROFILES=core
+RESTART_POLICY=on-failure:3
+```
+
+So the default command starts only the lightweight core:
 
 ```bash
 docker compose up -d
 ```
 
-The main compose file starts the 5G core, two UPFs, gNB, two UEs, Prometheus, Grafana, Pushgateway, Node Exporter, cAdvisor, and an iperf3 server for report-grade traffic generation.
-
-## Fix UPF NAT/QoS
-
-Run this after containers are up, or after restarting UPF/UE containers:
+Optional profiles:
 
 ```bash
-bash ./fix-upf.sh
+docker compose --profile monitoring up -d prometheus grafana pushgateway
+docker compose --profile heavy-monitoring up -d node-exporter cadvisor
+docker compose --profile traffic up -d embb-iperf-server urllc-iperf-server mqtt-server
+docker compose --profile webui up -d webui
 ```
 
-The script keeps UPF gateway IPs aligned with `config/smf.yaml`:
+When the setup is stable, change `.env` to:
 
-- `upf-embb`: `10.45.0.1/16`
-- `upf-urllc`: `10.46.0.1/16`
+```bash
+RESTART_POLICY=unless-stopped
+```
 
-It also applies scaled slice resource profiles. The scale is intentional: this VM-based Open5GS UPF has a much lower data-plane ceiling than a hardware-accelerated 5G UPF, so the benchmark evaluates resource isolation and SLA behavior at the capacity the lab can actually forward.
-
-- eMBB: 2 Mbps guaranteed rate, 6 Mbps ceiling, broadband-oriented queue.
-- uRLLC: 3 Mbps guaranteed rate, 7 Mbps ceiling, low delay/jitter and very short `fq_codel` queue.
-
-The eMBB profile is intentionally set below the measured downlink tunnel ceiling of this VM. This makes HTB enforce a real policy instead of configuring a rate higher than the Open5GS userspace UPF can forward. The current profile is uRLLC-first: eMBB is capped to leave CPU/queue headroom, while uRLLC receives a larger guaranteed share and a very short queue so latency remains predictable during contention.
-
-`fix-upf.sh` also raises the eMBB `ogstun` TX queue length and adds `fq_codel` below the eMBB shaping class to reduce TX path head-of-line blocking while keeping HTB as the root slicing qdisc.
-
-## Check If The Lab Is OK
+## Health Check
 
 ```bash
 bash ./check-5g.sh
 ```
 
-On Windows PowerShell:
-
-```powershell
-.\check-5g.ps1
-```
-
-This checks:
-
-- Docker Compose syntax
-- Required containers are running
-- `uesimtun0` exists on both UEs
-- Ping through each 5G tunnel
-- QoS rules on both UPFs
-- Prometheus readiness
+It checks Docker, Compose syntax, Mongo health, core containers, AMF/gNB/UE registration clues, PDU/PFCP activity, UE `uesimtun0`, slice gateway ping, and UPF `tc` policy. Optional monitoring/traffic services are WARN only.
 
 Useful manual checks:
 
 ```bash
 docker compose ps
-docker logs amf --tail 50
-docker logs smf --tail 50
-docker logs upf-embb --tail 50
-docker logs upf-urllc --tail 50
-docker exec ue-embb ping -I uesimtun0 1.1.1.1 -c 4
-docker exec ue-urllc ping -I uesimtun0 1.1.1.1 -c 4
+docker logs amf --tail 80
+docker logs smf --tail 80
+docker logs nssf --tail 80
+docker exec ue-embb ip addr show uesimtun0
+docker exec ue-urllc ip addr show uesimtun0
 docker exec upf-embb tc qdisc show dev ogstun
 docker exec upf-urllc tc qdisc show dev ogstun
 ```
 
-## Mongo Unhealthy
+## Traffic Tests
 
-If `docker compose up -d` says `container mongo is unhealthy`, check the real reason first:
-
-```bash
-docker compose ps mongo
-docker logs mongo --tail 100
-docker inspect mongo --format '{{json .State.Health}}'
-```
-
-Common fixes:
+Start traffic services:
 
 ```bash
-docker compose restart mongo
-sudo chown -R 999:999 mongodb_data
-docker compose up -d
+docker compose --profile traffic up -d embb-iperf-server urllc-iperf-server
 ```
 
-If this is a fresh lab and you do not need old subscriber data:
+Run eMBB TCP throughput:
 
 ```bash
-docker compose down
-sudo rm -rf mongodb_data
-docker compose up -d
+bash scripts/test-embb.sh
 ```
 
-## cAdvisor Port 8080 Busy
+This runs a reverse TCP test with `iperf3 -R`, `-P 4`, binds to the eMBB `uesimtun0` IP, checks `ip route get`, and writes `reports/embb-test-<timestamp>.log`.
 
-If Docker says `failed to bind host port ... 0.0.0.0:8080 ... address already in use`, another process is already using port `8080` on the VM. This lab does not need to expose cAdvisor on the host because Prometheus reaches it inside Docker at `cadvisor:8080`.
-
-Check who uses the port:
+Run URLLC UDP small packets:
 
 ```bash
-sudo ss -ltnp | grep ':8080'
+bash scripts/test-urllc.sh
 ```
 
-## Run The Resource Optimization Benchmark
+This runs UDP at 200 Kbps with 128-byte packets for 60 seconds by default, binds to the URLLC `uesimtun0` IP, checks `ip route get`, runs `ping -I uesimtun0`, prints jitter/loss output, and writes `reports/urllc-test-<timestamp>.log`.
 
-Use this benchmark for report-ready numbers. It tests the topic of the project directly: per-slice resource allocation, uRLLC SLA protection, and stability under eMBB load.
+Run mixed contention:
 
 ```bash
-bash ./run-5g-resource-optimization.sh
+bash scripts/test-mixed.sh
 ```
 
-Useful options:
+The eMBB flow represents 4K/8K video, cloud gaming, or large download pressure. The URLLC flow represents robot/camera/sensor control messages: smaller packets, lower bitrate, stricter latency/loss target.
+
+Verify that traffic is on the intended slice path:
 
 ```bash
-DURATION=90 STABILITY_DURATION=300 EMBB_PARALLEL=4 bash ./run-5g-resource-optimization.sh
-URLLC_TARGET=10.46.0.1 bash ./run-5g-resource-optimization.sh
-URLLC_TARGET=1.1.1.1 bash ./run-5g-resource-optimization.sh
+bash scripts/verify-slice-path.sh
 ```
 
-For NCKH/reporting, prefer `URLLC_TARGET=10.46.0.1` to measure the slice-local path. Use Internet targets only as an additional end-to-end scenario.
+The path verification writes `reports/slice-path-verification.txt` and checks:
 
-The benchmark produces:
+- eMBB packets are observed on `upf-embb`.
+- URLLC packets are observed on `upf-urllc`.
+- eMBB is not observed on `upf-urllc`.
+- URLLC is not observed on `upf-embb`.
 
-- Scenario A: uRLLC idle latency, jitter, and loss.
-- Scenario B: eMBB-only throughput under the downlink-safe scaled broadband profile.
-- Scenario C: uRLLC SLA while eMBB is saturated.
-- Scenario D: sustained stability samples for Grafana/report screenshots.
-- SLA and allocation-efficiency indicators, so the conclusion is about resource optimization rather than raw throughput.
-
-Reports are written to `reports/` as Markdown and CSV.
-
-For the report, interpret eMBB throughput carefully:
-
-- The Open5GS UPF in this lab is userspace GTP-U, so its forwarding ceiling can be much lower than the configured theoretical 5G target.
-- The benchmark therefore uses a scaled profile, where the question is whether the slicing policy protects uRLLC and allocates eMBB consistently at the lab's real data-plane capacity.
-- If uRLLC jitter rises under eMBB load, check `docker exec upf-urllc tc qdisc show dev ogstun`; the expected uRLLC profile is `htb -> netem -> fq_codel`.
-
-To debug a low eMBB result, run:
+Verify NSSF presence and log evidence:
 
 ```bash
-DURATION=20 FLOWS="1 2 4 8" bash ./scripts/debug-embb-throughput.sh
+bash scripts/verify-nssf.sh
 ```
 
-This prints four useful comparisons:
+If the script cannot confirm runtime AMF-to-NSSF network slice selection from logs, it reports that NSSF is present but the current slicing may still rely on static AMF/SMF configuration.
 
-- Docker bridge baseline, not forced through the 5G tunnel.
-- 5G tunnel upload, from UE to the iperf3 server.
-- 5G tunnel download, using iperf3 reverse mode.
-- `ogstun` counter throughput, to confirm whether the traffic is really crossing the UPF tunnel. Upload is compared with `ogstun` RX, while download is compared with `ogstun` TX.
+## Monitoring
 
-Use the result like this:
-
-- Bridge high but tunnel low means the bottleneck is UPF/GTP/VM CPU, not iperf3 itself.
-- Upload high but download low points to the downlink/reverse path or UPF TX queue.
-- Throughput dropping as flows increase means parallel TCP is overloading the userspace GTP path.
-- `iperf3` Mbps and the matching `ogstun` direction should be close; if they diverge strongly, the test path is not clean.
-- The script includes a short warm-up before tunnel measurements and prints a summary with upload ceiling, download ceiling, asymmetry ratio, and a suggested scaled parent rate.
-
-Note that HTTP download and `iperf3 -R` both exercise the downlink path, but their TCP behavior is not identical. With `iperf3 -R -P 8`, the server sends eight downlink streams while the UE sends ACK traffic back through the uplink tunnel. This can make Open5GS process many bidirectional GTP flows at the same time. If one-flow reverse mode is acceptable but eight-flow reverse mode collapses, treat ACK/uplink feedback overhead and userspace GTP scheduling as likely causes.
-
-Suggested report wording after the debug run:
-
-```text
-uRLLC achieved strong isolation, with a jitter isolation ratio close to 1.0, showing that HTB/fq_codel effectively protects the latency-sensitive slice in the testbed. Because the VM-based Open5GS UPF has a limited userspace GTP-U forwarding ceiling, the experiment uses a scaled uRLLC-first resource profile instead of claiming hardware-grade 5G throughput. Within that measured capacity, eMBB receives a controlled broadband allocation while uRLLC keeps its latency and jitter SLA under eMBB saturation. The results support the correctness of the per-slice resource separation and optimization design.
-```
-
-## Web UI
-
-- Open5GS WebUI: http://localhost:9999
-- Prometheus: http://localhost:9090
-- Grafana: http://localhost:3000
-
-Default Grafana login: `admin` / `admin`
-
-Open5GS WebUI default from the image is commonly `admin` / `1423`.
-
-## Grafana Dashboard
-
-Start the metric pusher:
+Monitoring is optional because it is expensive on Ubuntu VM/MacBook Air M1. Prometheus now scrapes every 15 seconds, and Grafana dashboards refresh every 15 seconds.
 
 ```bash
+docker compose --profile monitoring up -d prometheus grafana pushgateway
 nohup bash scripts/push-metrics.sh > /tmp/push-metrics.log 2>&1 &
 ```
 
-Restart Grafana after changing dashboard/provisioning files:
+Open:
 
-```bash
-docker compose up -d --force-recreate grafana
-```
+- Prometheus: http://localhost:9090
+- Grafana: http://localhost:3000
 
-Open Grafana:
+Grafana login: `admin` / `admin`.
 
-```text
-http://localhost:3000
-```
-
-Go to `Dashboards` -> `5G Lab` -> `5G Network Slicing`.
-
-The dashboard uses these PromQL queries:
+The custom UPF byte counters are pushed with job labels:
 
 ```promql
-rate(upf_embb_rx_bytes_total{job="upf_embb"}[30s]) * 8 / 1000000
-rate(upf_embb_tx_bytes_total{job="upf_embb"}[30s]) * 8 / 1000000
-rate(upf_urllc_rx_bytes_total{job="upf_urllc"}[30s]) * 8 / 1000000
-rate(upf_urllc_tx_bytes_total{job="upf_urllc"}[30s]) * 8 / 1000000
+rate(upf_embb_rx_bytes_total{job="upf-embb"}[30s]) * 8 / 1000000
+rate(upf_embb_tx_bytes_total{job="upf-embb"}[30s]) * 8 / 1000000
+rate(upf_urllc_rx_bytes_total{job="upf-urllc"}[30s]) * 8 / 1000000
+rate(upf_urllc_tx_bytes_total{job="upf-urllc"}[30s]) * 8 / 1000000
 ```
 
-Unit: Mbps.
+Check available metric names:
 
-If old non-`_total` metrics are still shown in Prometheus, clear the Pushgateway jobs and restart the pusher:
+```bash
+curl -s 'http://localhost:9090/api/v1/label/__name__/values' | tr ',' '\n' | grep -E 'upf|fivegs'
+curl -s http://localhost:9091/metrics | grep -E 'upf_.*bytes'
+```
+
+If old underscore jobs remain in Pushgateway:
 
 ```bash
 curl -X DELETE http://localhost:9091/metrics/job/upf_embb
 curl -X DELETE http://localhost:9091/metrics/job/upf_urllc
-pkill -f scripts/push-metrics.sh
-nohup bash scripts/push-metrics.sh > /tmp/push-metrics.log 2>&1 &
+curl -X DELETE http://localhost:9091/metrics/job/upf-embb
+curl -X DELETE http://localhost:9091/metrics/job/upf-urllc
 ```
 
-If the pusher exits, check:
+## Resource Optimization
+
+The simple baseline bottleneck is applied with Linux `tc` on each UPF `ogstun`. This is not a perfect shared radio scheduler, but it creates measurable resource pressure that is suitable for a VM-first experiment.
+
+Apply static QoS:
 
 ```bash
-cat /tmp/push-metrics.log
-sed -i 's/\r$//' scripts/push-metrics.sh
-nohup bash scripts/push-metrics.sh > /tmp/push-metrics.log 2>&1 &
+bash ./fix-upf.sh
 ```
+
+Run the SLA-aware dynamic allocator:
+
+```bash
+python3 scripts/controller/sla_dynamic_allocator.py --mode dynamic_sla_slicing --duration 120
+```
+
+Available modes:
+
+```bash
+python3 scripts/controller/sla_dynamic_allocator.py --mode no_slicing_baseline --duration 60
+python3 scripts/controller/sla_dynamic_allocator.py --mode static_slicing --duration 60
+python3 scripts/controller/sla_dynamic_allocator.py --mode dynamic_sla_slicing --duration 120
+```
+
+The controller samples every 3 seconds by default and writes CSV:
+
+```text
+timestamp,mode,embb_mbps,urllc_latency_ms,urllc_loss_percent,urllc_bw_limit,embb_bw_limit
+```
+
+Policy:
+
+- If URLLC latency exceeds 20 ms or loss exceeds 0.1%, increase URLLC bandwidth/priority and reduce eMBB.
+- If URLLC stays healthy for 3 cycles, reduce URLLC to its minimum and give spare capacity back to eMBB.
+- The implementation uses Linux `tc` HTB + `fq_codel`, not Deep Reinforcement Learning.
+
+## Evaluation Criteria
+
+Use these metrics in the report:
+
+- eMBB throughput, Mbps.
+- URLLC latency, average or p95.
+- URLLC jitter.
+- URLLC packet loss.
+- SLA violation rate.
+- Resource utilization and allocation efficiency.
+
+The expected story is:
+
+1. `no_slicing_baseline`: eMBB load can disturb URLLC.
+2. `static_slicing`: URLLC is protected, but capacity may be less flexible.
+3. `dynamic_sla_slicing`: URLLC receives more resources during SLA risk, then eMBB gets bandwidth back when URLLC is stable.
 
 ## Cleanup
 
@@ -242,9 +278,9 @@ nohup bash scripts/push-metrics.sh > /tmp/push-metrics.log 2>&1 &
 docker compose down
 ```
 
-To remove generated database/monitoring data:
+Remove generated data:
 
 ```bash
 docker compose down -v
-sudo rm -rf mongodb_data prometheus_data grafana_data
+sudo rm -rf mongodb_data prometheus_data grafana_data reports
 ```

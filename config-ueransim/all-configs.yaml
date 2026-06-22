@@ -1,0 +1,147 @@
+# Combined UERANSIM configuration files
+# Source: config-ueransim/gnb.yaml
+---
+mcc: '901'
+mnc: '70'
+nci: '0x000000010'
+idLength: 32
+tac: 1
+
+# gNB sử dụng IP tĩnh 172.20.1.10
+linkIp: 172.20.1.10
+ngapIp: 172.20.1.10
+gtpIp: 172.20.1.10
+
+# AMF configuration - kết nối tới AMF IP tĩnh
+amfConfigs:
+  - address: 172.20.0.20
+    port: 38412
+
+# Hỗ trợ 2 slices: eMBB, URLLC
+slices:
+  - sst: 1  # eMBB - Enhanced Mobile Broadband
+    sd: 0x000001
+  - sst: 2  # URLLC - Ultra-Reliable Low-Latency
+    sd: 0x000002
+
+ignoreStreamIds: true
+
+# Source: config-ueransim/ue-embb.yaml
+---
+# UE Configuration for eMBB (Enhanced Mobile Broadband)
+# Use case: 4K/8K video streaming, AR/VR, Cloud gaming
+
+supi: 'imsi-901700000000001'
+mcc: '901'
+mnc: '70'
+key: '465B5CE8B199B49FAA5F0A2EE238A6BC'
+op: 'E8ED289DEBA952E4283B54E88E6183CA'
+opType: 'OPC'
+amf: '8000'
+imei: '356938035643801'
+imeiSv: '4370816125816151'
+
+# Dynamic gNB discovery
+gnbSearchList:
+  - gnb
+
+uacAic:
+  mps: false
+  mcs: false
+
+uacAcc:
+  normalClass: 0
+  class11: false
+  class12: false
+  class13: false
+  class14: false
+  class15: false
+
+sessions:
+  - type: 'IPv4'
+    apn: 'internet'
+    slice:
+      sst: 1
+      sd: 0x000001
+
+configured-nssai:
+  - sst: 1
+    sd: 0x000001
+
+default-nssai:
+  - sst: 1
+    sd: 0x000001
+
+integrity:
+  IA1: true
+  IA2: true
+  IA3: true
+
+ciphering:
+  EA1: true
+  EA2: true
+  EA3: true
+
+integrityMaxRate:
+  uplink: 'full'
+  downlink: 'full'
+
+# Source: config-ueransim/ue-urllc.yaml
+---
+# UE Configuration for URLLC (Ultra-Reliable Low-Latency Communications)
+# Use case: Autonomous vehicles, Industrial automation, Remote surgery
+
+supi: 'imsi-901700000000002'
+mcc: '901'
+mnc: '70'
+key: '465B5CE8B199B49FAA5F0A2EE238A6BC'
+op: 'E8ED289DEBA952E4283B54E88E6183CA'
+opType: 'OPC'
+amf: '8000'
+imei: '356938035643802'
+imeiSv: '4370816125816152'
+
+# Dynamic gNB discovery
+gnbSearchList:
+  - gnb
+
+uacAic:
+  mps: true  # Mission critical
+  mcs: true
+
+uacAcc:
+  normalClass: 0
+  class11: false
+  class12: false
+  class13: false
+  class14: false
+  class15: false
+
+sessions:
+  - type: 'IPv4'
+    apn: 'internet2'
+    slice:
+      sst: 2
+      sd: 0x000002
+
+configured-nssai:
+  - sst: 2
+    sd: 0x000002
+
+default-nssai:
+  - sst: 2
+    sd: 0x000002
+
+integrity:
+  IA1: true
+  IA2: true
+  IA3: true
+
+ciphering:
+  EA1: true
+  EA2: true
+  EA3: true
+
+integrityMaxRate:
+  uplink: 'full'
+  downlink: 'full'
