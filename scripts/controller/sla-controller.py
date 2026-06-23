@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 import argparse
+import json
 import math
 import shlex
 import subprocess
@@ -12,6 +13,7 @@ REPO_ROOT = Path(__file__).resolve().parents[2]
 MEASURE_SCRIPT = REPO_ROOT / "scripts" / "measure-urllc-sla.sh"
 APPLY_POLICY_SCRIPT = REPO_ROOT / "scripts" / "apply-slice-policy.sh"
 PUSH_METRICS_SCRIPT = REPO_ROOT / "scripts" / "push-slice-metrics.sh"
+STATE_FILE = REPO_ROOT / "reports" / "controller-state.json"
 
 
 def run_command(cmd, check=True):
@@ -51,55 +53,49 @@ def parse_float(value, default=math.nan):
         return default
 
 
-def read_embb_tx_bytes():
-    result = subprocess.run(
-        [
-            "docker",
-            "exec",
-            "upf-embb",
-            "sh",
-            "-c",
-            "awk '$1 ~ /ogstun:/ {print $10}' /proc/net/dev",
-        ],
-        cwd=REPO_ROOT,
-        text=True,
-        capture_output=True,
-    )
-    if result.returncode != 0:
-        return None
+def load_state():
+    if not STATE_FILE.exists():
+        return {"profile": "dynamic-normal", "healthy_cycles": 0}
     try:
-        return int(result.stdout.strip() or "0")
-    except ValueError:
-        return None
+        with STATE_FILE.open("r", encoding="utf-8") as handle:
+            data = json.load(handle)
+    except (OSError, json.JSONDecodeError):
+        return {"profile": "dynamic-normal", "healthy_cycles": 0}
+
+    profile = data.get("profile", "dynamic-normal")
+    healthy_cycles = data.get("healthy_cycles", 0)
+    try:
+        healthy_cycles = int(healthy_cycles)
+    except (TypeError, ValueError):
+        healthy_cycles = 0
+    return {"profile": profile, "healthy_cycles": max(0, healthy_cycles)}
 
 
-def measure_urllc_and_embb():
-    before_bytes = read_embb_tx_bytes()
-    started = time.monotonic()
+def save_state(state):
+    STATE_FILE.parent.mkdir(parents=True, exist_ok=True)
+    with STATE_FILE.open("w", encoding="utf-8") as handle:
+        json.dump(state, handle, indent=2, sort_keys=True)
+        handle.write("\n")
+
+
+def measure_urllc():
     result = run_command(["bash", MEASURE_SCRIPT], check=False)
-    elapsed = max(0.001, time.monotonic() - started)
-    after_bytes = read_embb_tx_bytes()
 
     values = parse_key_values(result.stdout)
     latency_ms = parse_float(values.get("URLLC_LATENCY_AVG_MS"))
     loss_percent = parse_float(values.get("URLLC_PACKET_LOSS_PERCENT"), default=100.0)
 
-    embb_mbps = 0.0
-    if before_bytes is not None and after_bytes is not None and after_bytes >= before_bytes:
-        embb_mbps = (after_bytes - before_bytes) * 8 / elapsed / 1_000_000
-
     return {
         "latency_ms": latency_ms,
         "loss_percent": loss_percent,
-        "embb_mbps": embb_mbps,
         "measure_exit_code": result.returncode,
     }
 
 
-def decide_policy(metrics, latency_threshold_ms, loss_threshold_percent):
+def is_violation(metrics, latency_threshold_ms, loss_threshold_percent):
     latency = metrics["latency_ms"]
     loss = metrics["loss_percent"]
-    violation = (
+    return (
         metrics["measure_exit_code"] != 0
         or math.isnan(latency)
         or math.isnan(loss)
@@ -107,28 +103,79 @@ def decide_policy(metrics, latency_threshold_ms, loss_threshold_percent):
         or loss > loss_threshold_percent
     )
 
+
+def is_healthy_for_release(metrics, latency_threshold_ms):
+    latency = metrics["latency_ms"]
+    loss = metrics["loss_percent"]
+    return (
+        metrics["measure_exit_code"] == 0
+        and not math.isnan(latency)
+        and not math.isnan(loss)
+        and latency <= latency_threshold_ms
+        and loss == 0
+    )
+
+
+def allocation_for(profile):
+    if profile == "dynamic-urllc-priority":
+        return 10, 5
+    return 12, 3
+
+
+def decide_policy(metrics, args, state):
+    violation = is_violation(metrics, args.latency_threshold_ms, args.loss_threshold_percent)
+    previous_profile = state.get("profile", "dynamic-normal")
+    healthy_cycles = int(state.get("healthy_cycles", 0))
+
     if violation:
+        profile = "dynamic-urllc-priority"
+        healthy_cycles = 0
+        sla_violation = 1
+    elif previous_profile == "dynamic-urllc-priority":
+        if is_healthy_for_release(metrics, args.latency_threshold_ms):
+            healthy_cycles += 1
+        else:
+            healthy_cycles = 0
+        if healthy_cycles >= 2:
+            profile = "dynamic-normal"
+            healthy_cycles = 0
+        else:
+            profile = "dynamic-urllc-priority"
+        sla_violation = 0
+    else:
+        profile = "dynamic-normal"
+        healthy_cycles = 0
+        sla_violation = 0
+
+    embb_allocated_mbps, urllc_allocated_mbps = allocation_for(profile)
+    next_state = {"profile": profile, "healthy_cycles": healthy_cycles}
+
+    if profile == "dynamic-urllc-priority":
         return {
-            "profile": "dynamic-urllc-priority",
-            "embb_allocated_mbps": 10,
-            "urllc_allocated_mbps": 5,
-            "sla_violation": 1,
+            "profile": profile,
+            "embb_allocated_mbps": embb_allocated_mbps,
+            "urllc_allocated_mbps": urllc_allocated_mbps,
+            "sla_violation": sla_violation,
+            "state": next_state,
         }
 
     return {
-        "profile": "dynamic-normal",
-        "embb_allocated_mbps": 12,
-        "urllc_allocated_mbps": 3,
-        "sla_violation": 0,
+        "profile": profile,
+        "embb_allocated_mbps": embb_allocated_mbps,
+        "urllc_allocated_mbps": urllc_allocated_mbps,
+        "sla_violation": sla_violation,
+        "state": next_state,
     }
 
 
 def run_iteration(args, iteration, total_iterations):
     print(f"\n=== SLA controller iteration {iteration}/{total_iterations} ===", flush=True)
-    metrics = measure_urllc_and_embb()
-    decision = decide_policy(metrics, args.latency_threshold_ms, args.loss_threshold_percent)
+    state = load_state()
+    metrics = measure_urllc()
+    decision = decide_policy(metrics, args, state)
 
     run_command(["bash", APPLY_POLICY_SCRIPT, "--profile", decision["profile"]])
+    save_state(decision["state"])
 
     # TODO: parse URLLC jitter from iperf3 UDP output once scripts/test-urllc.sh
     # exposes stable machine-readable output. Ping loss is used for now.
@@ -140,8 +187,6 @@ def run_iteration(args, iteration, total_iterations):
             PUSH_METRICS_SCRIPT,
             "--profile",
             decision["profile"],
-            "--embb-mbps",
-            f"{metrics['embb_mbps']:.3f}",
             "--urllc-latency-ms",
             latency_text,
             "--urllc-jitter-ms",
@@ -160,8 +205,9 @@ def run_iteration(args, iteration, total_iterations):
     print(f"CONTROLLER_POLICY={decision['profile']}")
     print(f"URLLC_LATENCY_AVG_MS={latency_text}")
     print(f"URLLC_PACKET_LOSS_PERCENT={loss_text}")
-    print(f"EMBB_THROUGHPUT_MBPS={metrics['embb_mbps']:.3f}")
     print(f"SLA_VIOLATION={decision['sla_violation']}")
+    print(f"HEALTHY_CYCLES={decision['state']['healthy_cycles']}")
+    print(f"STATE_FILE={STATE_FILE.relative_to(REPO_ROOT)}")
 
 
 def main():

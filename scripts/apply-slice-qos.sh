@@ -1,6 +1,9 @@
 #!/bin/bash
 set -euo pipefail
 
+# tc/htb/netem/fq_codel is used only as a testbed proxy for resource pressure
+# and policy enforcement, not as standard 5G QoS.
+
 SLICE="${1:-}"
 DEV="${2:-ogstun}"
 EMBB_RATE="${EMBB_RATE:-2mbit}"
@@ -39,7 +42,7 @@ case "$SLICE" in
     embb)
         # eMBB favors large sustained throughput. The added delay/jitter keeps
         # the lab closer to a loaded mobile broadband path than a LAN link.
-        tc qdisc add dev "$DEV" root handle 1: htb default 10 r2q 1000
+        tc qdisc add dev "$DEV" root handle 1: htb default 10 r2q 10
         tc class add dev "$DEV" parent 1: classid 1:10 htb \
             rate "$EMBB_RATE" ceil "$EMBB_CEIL" \
             burst "$EMBB_BURST" cburst "$EMBB_CBURST" prio 2
@@ -54,7 +57,7 @@ case "$SLICE" in
         # URLLC trades peak throughput for low delay, low jitter, and smaller
         # queues so latency does not grow too much under short bursts. netem
         # models radio delay; fq_codel keeps the remaining queue short.
-        tc qdisc add dev "$DEV" root handle 1: htb default 10 r2q 1000
+        tc qdisc add dev "$DEV" root handle 1: htb default 10 r2q 10
         tc class add dev "$DEV" parent 1: classid 1:10 htb \
             rate "$URLLC_RATE" ceil "$URLLC_CEIL" \
             burst "$URLLC_BURST" cburst "$URLLC_CBURST" prio 0

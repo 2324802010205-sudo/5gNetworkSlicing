@@ -3,7 +3,7 @@ set -euo pipefail
 
 PUSHGATEWAY_URL="${PUSHGATEWAY_URL:-http://localhost:9091}"
 PROFILE=""
-EMBB_MBPS="0"
+EMBB_MBPS=""
 URLLC_LATENCY_MS="NaN"
 URLLC_JITTER_MS="0"
 URLLC_LOSS_PERCENT="0"
@@ -16,7 +16,6 @@ usage() {
 Usage:
   bash scripts/push-slice-metrics.sh \
     --profile dynamic-normal \
-    --embb-mbps 12 \
     --urllc-latency-ms 10.2 \
     --urllc-jitter-ms 1.1 \
     --urllc-loss-percent 0 \
@@ -42,7 +41,7 @@ while [ "$#" -gt 0 ]; do
 done
 
 case "$PROFILE" in
-    no-policy|static|dynamic-normal|dynamic-urllc-priority) ;;
+    no-policy|static|dynamic-normal|dynamic-urllc-priority|fault-urllc-congestion) ;;
     "")
         echo "Missing required --profile" >&2
         usage >&2
@@ -55,10 +54,14 @@ case "$PROFILE" in
 esac
 
 {
-    cat <<EOF
+    if [ -n "$EMBB_MBPS" ]; then
+        cat <<EOF
 # HELP slice_throughput_mbps Slice throughput in Mbps.
 # TYPE slice_throughput_mbps gauge
 slice_throughput_mbps{slice="embb",profile="$PROFILE"} $EMBB_MBPS
+EOF
+    fi
+    cat <<EOF
 # HELP slice_latency_ms Slice latency in milliseconds.
 # TYPE slice_latency_ms gauge
 slice_latency_ms{slice="urllc",profile="$PROFILE"} $URLLC_LATENCY_MS
@@ -78,13 +81,13 @@ slice_allocated_mbps{slice="urllc",profile="$PROFILE"} $URLLC_ALLOCATED_MBPS
 # HELP slice_policy_active Active policy profile flag.
 # TYPE slice_policy_active gauge
 EOF
-    for candidate in no-policy static dynamic-normal dynamic-urllc-priority; do
+    for candidate in no-policy static dynamic-normal dynamic-urllc-priority fault-urllc-congestion; do
         if [ "$candidate" = "$PROFILE" ]; then
             echo "slice_policy_active{profile=\"$candidate\"} 1"
         else
             echo "slice_policy_active{profile=\"$candidate\"} 0"
         fi
     done
-} | curl -fsS --data-binary @- "$PUSHGATEWAY_URL/metrics/job/slice-controller" >/dev/null
+} | curl -fsS -X PUT --data-binary @- "$PUSHGATEWAY_URL/metrics/job/slice-controller" >/dev/null
 
 echo "Pushed slice metrics to $PUSHGATEWAY_URL for profile=$PROFILE"

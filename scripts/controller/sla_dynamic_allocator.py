@@ -58,7 +58,7 @@ def delete_qdisc(container):
 def apply_limit(container, mbps, prio, target_ms):
     mbps = max(1, int(mbps))
     command = f"""
-tc qdisc replace dev ogstun root handle 1: htb default 10 r2q 1000
+tc qdisc replace dev ogstun root handle 1: htb default 10 r2q 10
 tc class replace dev ogstun parent 1: classid 1:10 htb rate {mbps}mbit ceil {mbps}mbit burst 64k cburst 64k prio {prio}
 tc qdisc replace dev ogstun parent 1:10 handle 10: fq_codel limit 256 target {target_ms}ms interval 100ms ecn
 tc qdisc show dev ogstun >/dev/null

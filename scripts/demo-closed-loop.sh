@@ -42,7 +42,6 @@ fi
 
 bash scripts/push-slice-metrics.sh \
     --profile dynamic-normal \
-    --embb-mbps 0 \
     --urllc-latency-ms "$URLLC_LATENCY_MS" \
     --urllc-jitter-ms 0 \
     --urllc-loss-percent "$URLLC_LOSS_PERCENT" \

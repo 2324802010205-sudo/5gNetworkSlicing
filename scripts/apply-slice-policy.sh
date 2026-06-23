@@ -11,6 +11,7 @@ Usage:
   bash scripts/apply-slice-policy.sh --profile static
   bash scripts/apply-slice-policy.sh --profile dynamic-normal
   bash scripts/apply-slice-policy.sh --profile dynamic-urllc-priority
+  bash scripts/apply-slice-policy.sh --profile fault-urllc-congestion
 EOF
 }
 
@@ -57,13 +58,33 @@ clear_qdisc() {
     docker exec "$container" sh -c 'tc qdisc del dev ogstun root 2>/dev/null || true'
 }
 
-apply_htb_limit() {
+reset_qdisc() {
+    clear_qdisc "$1"
+}
+
+apply_htb_fq_codel() {
     local container="$1"
     local rate="$2"
 
+    reset_qdisc "$container"
     docker exec "$container" sh -c "
-tc qdisc replace dev ogstun root handle 1: htb default 10
-tc class replace dev ogstun parent 1: classid 1:10 htb rate $rate ceil $rate
+tc qdisc add dev ogstun root handle 1: htb default 10
+tc class add dev ogstun parent 1: classid 1:10 htb rate $rate ceil $rate
+tc qdisc add dev ogstun parent 1:10 handle 10: fq_codel
+"
+}
+
+apply_htb_netem_fq_codel() {
+    local container="$1"
+    local rate="$2"
+    local netem_args="$3"
+
+    reset_qdisc "$container"
+    docker exec "$container" sh -c "
+tc qdisc add dev ogstun root handle 1: htb default 10
+tc class add dev ogstun parent 1: classid 1:10 htb rate $rate ceil $rate
+tc qdisc add dev ogstun parent 1:10 handle 10: netem $netem_args
+tc qdisc add dev ogstun parent 10:1 handle 100: fq_codel
 "
 }
 
@@ -87,14 +108,19 @@ case "$PROFILE" in
         echo "Applied profile=no-policy"
         ;;
     static|dynamic-normal)
-        apply_htb_limit upf-embb 12Mbit
-        apply_htb_limit upf-urllc 3Mbit
+        apply_htb_fq_codel upf-embb 12Mbit
+        apply_htb_fq_codel upf-urllc 3Mbit
         echo "Applied profile=$PROFILE embb=12Mbit urllc=3Mbit"
         ;;
     dynamic-urllc-priority)
-        apply_htb_limit upf-embb 10Mbit
-        apply_htb_limit upf-urllc 5Mbit
+        apply_htb_fq_codel upf-embb 10Mbit
+        apply_htb_fq_codel upf-urllc 5Mbit
         echo "Applied profile=dynamic-urllc-priority embb=10Mbit urllc=5Mbit"
+        ;;
+    fault-urllc-congestion)
+        apply_htb_netem_fq_codel upf-embb 12Mbit "delay 6ms 1ms"
+        apply_htb_netem_fq_codel upf-urllc 1Mbit "delay 50ms 5ms loss 1%"
+        echo "Applied profile=fault-urllc-congestion embb=12Mbit urllc=1Mbit with URLLC delay/loss fault"
         ;;
     *)
         echo "Unsupported profile: $PROFILE" >&2
