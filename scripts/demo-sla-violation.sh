@@ -4,7 +4,9 @@ set -euo pipefail
 cd "$(dirname "${BASH_SOURCE[0]}")/.."
 
 LATENCY_THRESHOLD_MS="${LATENCY_THRESHOLD_MS:-15}"
+PUSHGATEWAY_URL="${PUSHGATEWAY_URL:-http://localhost:9091}"
 RESULTS_CSV="${RESULTS_CSV:-reports/closed-loop-results.csv}"
+SUMMARY_MD="${SUMMARY_MD:-reports/closed-loop-summary.md}"
 
 LAST_EMBB_MBPS="NaN"
 LAST_EMBB_STATUS="FAIL"
@@ -12,6 +14,16 @@ LAST_URLLC_LATENCY="NaN"
 LAST_URLLC_LOSS="100"
 LAST_URLLC_STATUS="FAIL"
 LAST_SLA_VIOLATION="1"
+
+NO_POLICY_EMBB="NaN"
+DYNAMIC_NORMAL_EMBB="NaN"
+URLLC_BASELINE_LATENCY="NaN"
+FAULT_URLLC_LATENCY="NaN"
+CONTROLLER_SELECTED_POLICY="unknown"
+LAST_CONTROLLER_POLICY="unknown"
+PRIORITY_EMBB="NaN"
+RECOVERY_URLLC_LATENCY="NaN"
+FINAL_POLICY="unknown"
 
 extract_metric() {
     local key="$1"
@@ -30,6 +42,22 @@ is_sla_violation() {
             exit 1
         }
     '
+}
+
+reset_pushgateway_metrics() {
+    echo "Resetting old Pushgateway slice-controller metrics"
+    curl -fsS -X DELETE "$PUSHGATEWAY_URL/metrics/job/slice-controller" >/dev/null 2>&1 || true
+    {
+        cat <<'EOF'
+# HELP slice_policy_active Active policy profile flag.
+# TYPE slice_policy_active gauge
+slice_policy_active{profile="no-policy"} 0
+slice_policy_active{profile="static"} 0
+slice_policy_active{profile="dynamic-normal"} 0
+slice_policy_active{profile="dynamic-urllc-priority"} 0
+slice_policy_active{profile="fault-urllc-congestion"} 0
+EOF
+    } | curl -fsS -X PUT --data-binary @- "$PUSHGATEWAY_URL/metrics/job/slice-controller" >/dev/null 2>&1 || true
 }
 
 measure_embb() {
@@ -102,7 +130,7 @@ push_snapshot() {
 }
 
 append_result() {
-    local step="$1"
+    local phase="$1"
     local profile="$2"
     local embb_allocated="$3"
     local urllc_allocated="$4"
@@ -110,15 +138,46 @@ append_result() {
 
     printf '%s,%s,%s,%s,%s,%s,%s,%s,%s,%s\n' \
         "$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
-        "$step" \
+        "$phase" \
         "$profile" \
+        "$embb_allocated" \
+        "$urllc_allocated" \
         "$LAST_EMBB_MBPS" \
         "$LAST_URLLC_LATENCY" \
         "$LAST_URLLC_LOSS" \
         "$LAST_SLA_VIOLATION" \
-        "$embb_allocated" \
-        "$urllc_allocated" \
         "$status" >> "$RESULTS_CSV"
+}
+
+run_controller() {
+    local iterations="$1"
+    local output rc
+
+    set +e
+    if [ "$iterations" = "1" ]; then
+        output=$(python3 scripts/controller/sla-controller.py --once \
+            --latency-threshold-ms "$LATENCY_THRESHOLD_MS" \
+            --loss-threshold-percent 0 2>&1)
+        rc=$?
+    else
+        output=$(python3 scripts/controller/sla-controller.py --interval 10 --iterations "$iterations" \
+            --latency-threshold-ms "$LATENCY_THRESHOLD_MS" \
+            --loss-threshold-percent 0 2>&1)
+        rc=$?
+    fi
+    set -e
+    printf '%s\n' "$output"
+
+    LAST_CONTROLLER_POLICY=$(printf '%s\n' "$output" | extract_metric CONTROLLER_POLICY)
+    LAST_CONTROLLER_POLICY="${LAST_CONTROLLER_POLICY:-unknown}"
+    if [ "$CONTROLLER_SELECTED_POLICY" = "unknown" ] && [ "$LAST_CONTROLLER_POLICY" != "unknown" ]; then
+        CONTROLLER_SELECTED_POLICY="$LAST_CONTROLLER_POLICY"
+    fi
+
+    if [ "$rc" -ne 0 ]; then
+        echo "Controller failed" >&2
+        exit "$rc"
+    fi
 }
 
 profile_allocations() {
@@ -131,6 +190,40 @@ profile_allocations() {
     esac
 }
 
+write_summary() {
+    cat > "$SUMMARY_MD" <<EOF
+# Closed-loop Resource Allocation Demo Summary
+
+## Key Results
+
+- no-policy eMBB throughput: ${NO_POLICY_EMBB} Mbps
+- dynamic-normal eMBB throughput: ${DYNAMIC_NORMAL_EMBB} Mbps
+- URLLC baseline latency: ${URLLC_BASELINE_LATENCY} ms
+- fault URLLC latency: ${FAULT_URLLC_LATENCY} ms
+- controller selected policy: ${CONTROLLER_SELECTED_POLICY}
+- dynamic-urllc-priority eMBB throughput: ${PRIORITY_EMBB} Mbps
+- recovery URLLC latency: ${RECOVERY_URLLC_LATENCY} ms
+- final policy: ${FINAL_POLICY}
+
+## Closed-loop Evidence
+
+The demo follows the closed-loop sequence:
+
+1. measure URLLC SLA and eMBB throughput
+2. decide whether SLA is violated
+3. apply the selected slice resource policy
+4. verify the result through metrics and Grafana
+
+This demonstrates closed-loop resource allocation for the testbed. It does not implement two-path path computation.
+
+## Testbed Scope
+
+tc/htb/netem/fq_codel is only a testbed proxy for resource pressure and policy enforcement, not standard 5G QoS.
+
+Detailed samples are in \`${RESULTS_CSV}\`.
+EOF
+}
+
 echo "Starting monitoring stack if local images are available"
 if ! docker compose --profile monitoring up -d --pull never prometheus pushgateway grafana; then
     echo "WARN: monitoring stack was not started. Start it manually if Pushgateway/Grafana are not already running."
@@ -140,6 +233,8 @@ echo "Starting traffic targets"
 docker compose --profile traffic up -d embb-iperf-server urllc-iperf-server
 
 mkdir -p reports
+reset_pushgateway_metrics
+
 cat > reports/controller-state.json <<'EOF'
 {
   "healthy_cycles": 0,
@@ -148,63 +243,68 @@ cat > reports/controller-state.json <<'EOF'
 EOF
 
 cat > "$RESULTS_CSV" <<'EOF'
-timestamp,step,profile,embb_throughput_mbps,urllc_latency_ms,urllc_loss_percent,sla_violation,embb_allocated_mbps,urllc_allocated_mbps,status
+timestamp,phase,profile,embb_allocated_mbps,urllc_allocated_mbps,embb_throughput_mbps,urllc_latency_avg_ms,urllc_loss_percent,sla_violation,status
 EOF
 
 echo
-echo "Step 1: no-policy eMBB throughput baseline"
+echo "Phase 1: no-policy eMBB throughput baseline"
 bash scripts/apply-slice-policy.sh --profile no-policy
 LAST_URLLC_LATENCY="NaN"
 LAST_URLLC_LOSS="0"
 LAST_SLA_VIOLATION="0"
 measure_embb
+NO_POLICY_EMBB="$LAST_EMBB_MBPS"
 push_snapshot no-policy 0 0 "$LAST_EMBB_MBPS" "$LAST_URLLC_LATENCY" "$LAST_URLLC_LOSS" "$LAST_SLA_VIOLATION"
 append_result no-policy-baseline no-policy 0 0 "$LAST_EMBB_STATUS"
 
 echo
-echo "Step 2: dynamic-normal eMBB throughput and URLLC SLA"
+echo "Phase 2: dynamic-normal eMBB throughput and URLLC SLA"
 bash scripts/apply-slice-policy.sh --profile dynamic-normal
 measure_embb
 measure_urllc
+DYNAMIC_NORMAL_EMBB="$LAST_EMBB_MBPS"
+URLLC_BASELINE_LATENCY="$LAST_URLLC_LATENCY"
 push_snapshot dynamic-normal 12 3 "$LAST_EMBB_MBPS" "$LAST_URLLC_LATENCY" "$LAST_URLLC_LOSS" "$LAST_SLA_VIOLATION"
 append_result dynamic-normal dynamic-normal 12 3 "$LAST_EMBB_STATUS/$LAST_URLLC_STATUS"
 
 echo
-echo "Step 3: inject URLLC congestion fault"
+echo "Phase 3: inject URLLC congestion fault"
 bash scripts/apply-slice-policy.sh --profile fault-urllc-congestion
 LAST_EMBB_MBPS="NaN"
 measure_urllc
+FAULT_URLLC_LATENCY="$LAST_URLLC_LATENCY"
 push_snapshot fault-urllc-congestion 12 1 "" "$LAST_URLLC_LATENCY" "$LAST_URLLC_LOSS" "$LAST_SLA_VIOLATION"
 append_result fault-urllc-congestion fault-urllc-congestion 12 1 "$LAST_URLLC_STATUS"
 
 echo
-echo "Step 4: run controller once; expected policy is dynamic-urllc-priority"
-python3 scripts/controller/sla-controller.py --once \
-    --latency-threshold-ms "$LATENCY_THRESHOLD_MS" \
-    --loss-threshold-percent 0
+echo "Phase 4: run controller once; expected policy is dynamic-urllc-priority"
+run_controller 1
 
 echo
-echo "Step 5: measure eMBB throughput and recovered URLLC SLA under dynamic-urllc-priority"
+echo "Phase 5: measure eMBB throughput and recovered URLLC SLA under dynamic-urllc-priority"
 measure_embb
 measure_urllc
+PRIORITY_EMBB="$LAST_EMBB_MBPS"
+RECOVERY_URLLC_LATENCY="$LAST_URLLC_LATENCY"
 push_snapshot dynamic-urllc-priority 10 5 "$LAST_EMBB_MBPS" "$LAST_URLLC_LATENCY" "$LAST_URLLC_LOSS" "$LAST_SLA_VIOLATION"
 append_result dynamic-urllc-priority dynamic-urllc-priority 10 5 "$LAST_EMBB_STATUS/$LAST_URLLC_STATUS"
 
 echo
-echo "Step 6: let controller run 3 more iterations so hysteresis can return to dynamic-normal"
-python3 scripts/controller/sla-controller.py --interval 10 --iterations 3 \
-    --latency-threshold-ms "$LATENCY_THRESHOLD_MS" \
-    --loss-threshold-percent 0
+echo "Phase 6: let controller run 3 more iterations so hysteresis can return to dynamic-normal"
+run_controller 3
 
-CURRENT_PROFILE=$(python3 -c 'import json; print(json.load(open("reports/controller-state.json")).get("profile", "dynamic-normal"))' 2>/dev/null || echo "dynamic-normal")
-read -r FINAL_EMBB_ALLOC FINAL_URLLC_ALLOC <<< "$(profile_allocations "$CURRENT_PROFILE")"
+FINAL_POLICY=$(python3 -c 'import json; print(json.load(open("reports/controller-state.json")).get("profile", "dynamic-normal"))' 2>/dev/null || echo "dynamic-normal")
+read -r FINAL_EMBB_ALLOC FINAL_URLLC_ALLOC <<< "$(profile_allocations "$FINAL_POLICY")"
 
 echo
-echo "Step 7: final eMBB throughput and URLLC SLA snapshot for $CURRENT_PROFILE"
+echo "Phase 7: final eMBB throughput and URLLC SLA snapshot for $FINAL_POLICY"
 measure_embb
 measure_urllc
-push_snapshot "$CURRENT_PROFILE" "$FINAL_EMBB_ALLOC" "$FINAL_URLLC_ALLOC" "$LAST_EMBB_MBPS" "$LAST_URLLC_LATENCY" "$LAST_URLLC_LOSS" "$LAST_SLA_VIOLATION"
-append_result final-snapshot "$CURRENT_PROFILE" "$FINAL_EMBB_ALLOC" "$FINAL_URLLC_ALLOC" "$LAST_EMBB_STATUS/$LAST_URLLC_STATUS"
+RECOVERY_URLLC_LATENCY="$LAST_URLLC_LATENCY"
+push_snapshot "$FINAL_POLICY" "$FINAL_EMBB_ALLOC" "$FINAL_URLLC_ALLOC" "$LAST_EMBB_MBPS" "$LAST_URLLC_LATENCY" "$LAST_URLLC_LOSS" "$LAST_SLA_VIOLATION"
+append_result final-snapshot "$FINAL_POLICY" "$FINAL_EMBB_ALLOC" "$FINAL_URLLC_ALLOC" "$LAST_EMBB_STATUS/$LAST_URLLC_STATUS"
+
+write_summary
 
 echo
 echo "Current tc classes:"
@@ -213,6 +313,7 @@ docker exec upf-urllc tc class show dev ogstun
 
 echo
 echo "Results CSV: $RESULTS_CSV"
+echo "Summary: $SUMMARY_MD"
 
 echo
 echo "Verification commands:"

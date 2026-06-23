@@ -75,8 +75,10 @@
             "type": "prometheus",
             "uid": "prometheus"
           },
-          "expr": "max by (profile) (slice_policy_active == 1)",
+          "expr": "topk(1, slice_policy_active == 1)",
+          "instant": true,
           "legendFormat": "{{profile}}",
+          "range": false,
           "refId": "A"
         }
       ],
@@ -138,7 +140,9 @@
             "uid": "prometheus"
           },
           "expr": "slice_allocated_mbps{slice=\"embb\"}",
+          "instant": true,
           "legendFormat": "{{profile}}",
+          "range": false,
           "refId": "A"
         }
       ],
@@ -200,7 +204,9 @@
             "uid": "prometheus"
           },
           "expr": "slice_allocated_mbps{slice=\"urllc\"}",
+          "instant": true,
           "legendFormat": "{{profile}}",
+          "range": false,
           "refId": "A"
         }
       ],
@@ -294,11 +300,13 @@
             "uid": "prometheus"
           },
           "expr": "slice_sla_violation{slice=\"urllc\"}",
+          "instant": true,
           "legendFormat": "{{profile}}",
+          "range": false,
           "refId": "A"
         }
       ],
-      "title": "URLLC SLA Violation",
+      "title": "URLLC SLA Status",
       "type": "stat"
     },
     {
@@ -730,6 +738,6 @@
   "timezone": "browser",
   "title": "5G Network Slicing Resource Optimization",
   "uid": "5g-network-slicing",
-  "version": 3,
+  "version": 4,
   "weekStart": ""
 }
