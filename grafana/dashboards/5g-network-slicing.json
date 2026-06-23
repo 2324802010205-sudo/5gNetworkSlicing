@@ -319,7 +319,7 @@
           "showLineNumbers": false,
           "showMiniMap": false
         },
-        "content": "tc/htb/netem/fq_codel is only a testbed proxy, not standard 5G QoS.",
+        "content": "tc/htb/netem/fq_codel is only a testbed proxy for resource pressure, not standard 5G QoS.",
         "mode": "markdown"
       },
       "pluginVersion": "11.2.0",
@@ -488,8 +488,8 @@
       "gridPos": {
         "h": 8,
         "w": 12,
-        "x": 12,
-        "y": 4
+        "x": 0,
+        "y": 12
       },
       "id": 7,
       "options": {
@@ -582,8 +582,8 @@
       "gridPos": {
         "h": 8,
         "w": 12,
-        "x": 0,
-        "y": 12
+        "x": 12,
+        "y": 4
       },
       "id": 8,
       "options": {
@@ -730,6 +730,6 @@
   "timezone": "browser",
   "title": "5G Network Slicing Resource Optimization",
   "uid": "5g-network-slicing",
-  "version": 2,
+  "version": 3,
   "weekStart": ""
 }

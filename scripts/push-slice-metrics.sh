@@ -16,6 +16,7 @@ usage() {
 Usage:
   bash scripts/push-slice-metrics.sh \
     --profile dynamic-normal \
+    --embb-mbps 12.1 \
     --urllc-latency-ms 10.2 \
     --urllc-jitter-ms 1.1 \
     --urllc-loss-percent 0 \
