@@ -4,6 +4,7 @@ set -euo pipefail
 IMAGE="${IPERF_IMAGE:-networkstatic/iperf3:latest}"
 EMBB_SERVER="${EMBB_SERVER_IP:-172.20.0.221}"
 EMBB_PORT="${EMBB_PORT:-5201}"
+EMBB_PARALLEL="${EMBB_PARALLEL:-2}"
 URLLC_SERVER="${URLLC_SERVER_IP:-172.20.0.222}"
 URLLC_PORT="${URLLC_PORT:-5202}"
 EMBB_DURATION="${EMBB_DURATION:-8}"
@@ -156,7 +157,7 @@ PID1=$(start_capture upf-embb "$EMBB_ON_EMBB" "$EMBB_FILTER")
 PID2=$(start_capture upf-urllc "$EMBB_ON_URLLC" "$EMBB_FILTER")
 sleep 2
 docker run --rm --network container:ue-embb "$IMAGE" \
-    -c "$EMBB_SERVER" -p "$EMBB_PORT" -B "$EMBB_IP" -P 4 -t "$EMBB_DURATION" -R >/dev/null
+    -c "$EMBB_SERVER" -p "$EMBB_PORT" -B "$EMBB_IP" -P "$EMBB_PARALLEL" -t "$EMBB_DURATION" -R >/dev/null
 wait_capture "$PID1"
 wait_capture "$PID2"
 record_path_result "eMBB" "$EMBB_ON_EMBB" "$EMBB_ON_URLLC" \

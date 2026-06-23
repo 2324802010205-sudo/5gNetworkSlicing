@@ -183,7 +183,7 @@ Run eMBB TCP throughput:
 bash scripts/test-embb.sh
 ```
 
-This runs a reverse TCP test with `iperf3 -R`, `-P 4`, binds to the eMBB `uesimtun0` IP, checks `ip route get`, and writes `reports/embb-test-<timestamp>.log`.
+This runs a reverse TCP test with `iperf3 -R`, `-P 2` by default, binds to the eMBB `uesimtun0` IP, checks `ip route get`, and writes `reports/embb-test-<timestamp>.log`. Use higher parallelism only as an explicit stress test.
 
 Run URLLC UDP small packets:
 

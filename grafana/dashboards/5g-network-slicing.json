@@ -37,12 +37,8 @@
             "mode": "absolute",
             "steps": [
               {
-                "color": "red",
+                "color": "blue",
                 "value": null
-              },
-              {
-                "color": "green",
-                "value": 1
               }
             ]
           },
@@ -69,22 +65,146 @@
           "fields": "",
           "values": false
         },
-        "textMode": "auto",
+        "textMode": "name",
         "wideLayout": true
       },
-      "pluginVersion": "11.0.0",
+      "pluginVersion": "11.2.0",
       "targets": [
         {
           "datasource": {
             "type": "prometheus",
             "uid": "prometheus"
           },
-          "expr": "up{job=\"upf-embb\"}",
-          "legendFormat": "UPF eMBB",
+          "expr": "max by (profile) (slice_policy_active == 1)",
+          "legendFormat": "{{profile}}",
           "refId": "A"
         }
       ],
-      "title": "UPF eMBB",
+      "title": "Current Policy",
+      "type": "stat"
+    },
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "thresholds"
+          },
+          "mappings": [],
+          "min": 0,
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              }
+            ]
+          },
+          "unit": "Mbits"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 4,
+        "w": 4,
+        "x": 6,
+        "y": 0
+      },
+      "id": 2,
+      "options": {
+        "colorMode": "value",
+        "graphMode": "area",
+        "justifyMode": "center",
+        "orientation": "auto",
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "textMode": "auto",
+        "wideLayout": true
+      },
+      "pluginVersion": "11.2.0",
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "expr": "slice_allocated_mbps{slice=\"embb\"}",
+          "legendFormat": "{{profile}}",
+          "refId": "A"
+        }
+      ],
+      "title": "eMBB Allocated Mbps",
+      "type": "stat"
+    },
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "thresholds"
+          },
+          "mappings": [],
+          "min": 0,
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              }
+            ]
+          },
+          "unit": "Mbits"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 4,
+        "w": 4,
+        "x": 10,
+        "y": 0
+      },
+      "id": 3,
+      "options": {
+        "colorMode": "value",
+        "graphMode": "area",
+        "justifyMode": "center",
+        "orientation": "auto",
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "textMode": "auto",
+        "wideLayout": true
+      },
+      "pluginVersion": "11.2.0",
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "expr": "slice_allocated_mbps{slice=\"urllc\"}",
+          "legendFormat": "{{profile}}",
+          "refId": "A"
+        }
+      ],
+      "title": "URLLC Allocated Mbps",
       "type": "stat"
     },
     {
@@ -102,26 +222,55 @@
             "mode": "absolute",
             "steps": [
               {
-                "color": "red",
+                "color": "green",
                 "value": null
               },
               {
-                "color": "green",
+                "color": "red",
                 "value": 1
               }
             ]
           },
           "unit": "short"
         },
-        "overrides": []
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Value"
+            },
+            "properties": [
+              {
+                "id": "mappings",
+                "value": [
+                  {
+                    "options": {
+                      "0": {
+                        "color": "green",
+                        "index": 0,
+                        "text": "OK"
+                      },
+                      "1": {
+                        "color": "red",
+                        "index": 1,
+                        "text": "VIOLATION"
+                      }
+                    },
+                    "type": "value"
+                  }
+                ]
+              }
+            ]
+          }
+        ]
       },
       "gridPos": {
         "h": 4,
-        "w": 6,
-        "x": 6,
+        "w": 4,
+        "x": 14,
         "y": 0
       },
-      "id": 2,
+      "id": 4,
       "options": {
         "colorMode": "background",
         "graphMode": "none",
@@ -137,19 +286,19 @@
         "textMode": "auto",
         "wideLayout": true
       },
-      "pluginVersion": "11.0.0",
+      "pluginVersion": "11.2.0",
       "targets": [
         {
           "datasource": {
             "type": "prometheus",
             "uid": "prometheus"
           },
-          "expr": "up{job=\"upf-urllc\"}",
-          "legendFormat": "UPF uRLLC",
+          "expr": "slice_sla_violation{slice=\"urllc\"}",
+          "legendFormat": "{{profile}}",
           "refId": "A"
         }
       ],
-      "title": "UPF uRLLC",
+      "title": "URLLC SLA Violation",
       "type": "stat"
     },
     {
@@ -157,6 +306,31 @@
         "type": "prometheus",
         "uid": "prometheus"
       },
+      "gridPos": {
+        "h": 4,
+        "w": 6,
+        "x": 18,
+        "y": 0
+      },
+      "id": 5,
+      "options": {
+        "code": {
+          "language": "plaintext",
+          "showLineNumbers": false,
+          "showMiniMap": false
+        },
+        "content": "tc/htb/netem/fq_codel is only a testbed proxy, not standard 5G QoS.",
+        "mode": "markdown"
+      },
+      "pluginVersion": "11.2.0",
+      "title": "Testbed Note",
+      "type": "text"
+    },
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
       "fieldConfig": {
         "defaults": {
           "color": {
@@ -166,7 +340,7 @@
             "axisBorderShow": false,
             "axisCenteredZero": false,
             "axisColorMode": "text",
-            "axisLabel": "Mbps",
+            "axisLabel": "ms",
             "axisPlacement": "auto",
             "barAlignment": 0,
             "drawStyle": "line",
@@ -178,20 +352,20 @@
               "viz": false
             },
             "insertNulls": false,
-            "lineInterpolation": "smooth",
+            "lineInterpolation": "linear",
             "lineWidth": 2,
             "pointSize": 5,
             "scaleDistribution": {
               "type": "linear"
             },
-            "showPoints": "never",
+            "showPoints": "auto",
             "spanNulls": true,
             "stacking": {
               "group": "A",
               "mode": "none"
             },
             "thresholdsStyle": {
-              "mode": "off"
+              "mode": "line"
             }
           },
           "mappings": [],
@@ -202,20 +376,24 @@
               {
                 "color": "green",
                 "value": null
+              },
+              {
+                "color": "red",
+                "value": 15
               }
             ]
           },
-          "unit": "Mbits"
+          "unit": "ms"
         },
         "overrides": []
       },
       "gridPos": {
-        "h": 9,
+        "h": 8,
         "w": 12,
         "x": 0,
         "y": 4
       },
-      "id": 3,
+      "id": 6,
       "options": {
         "legend": {
           "calcs": [
@@ -238,21 +416,12 @@
             "type": "prometheus",
             "uid": "prometheus"
           },
-          "expr": "rate(upf_embb_rx_bytes_total{job=\"upf-embb\"}[30s]) * 8 / 1000000",
-          "legendFormat": "eMBB RX",
+          "expr": "slice_latency_ms{slice=\"urllc\"}",
+          "legendFormat": "{{profile}}",
           "refId": "A"
-        },
-        {
-          "datasource": {
-            "type": "prometheus",
-            "uid": "prometheus"
-          },
-          "expr": "rate(upf_embb_tx_bytes_total{job=\"upf-embb\"}[30s]) * 8 / 1000000",
-          "legendFormat": "eMBB TX",
-          "refId": "B"
         }
       ],
-      "title": "eMBB Throughput",
+      "title": "URLLC Latency ms",
       "type": "timeseries"
     },
     {
@@ -269,7 +438,7 @@
             "axisBorderShow": false,
             "axisCenteredZero": false,
             "axisColorMode": "text",
-            "axisLabel": "Mbps",
+            "axisLabel": "%",
             "axisPlacement": "auto",
             "barAlignment": 0,
             "drawStyle": "line",
@@ -281,20 +450,20 @@
               "viz": false
             },
             "insertNulls": false,
-            "lineInterpolation": "smooth",
+            "lineInterpolation": "linear",
             "lineWidth": 2,
             "pointSize": 5,
             "scaleDistribution": {
               "type": "linear"
             },
-            "showPoints": "never",
+            "showPoints": "auto",
             "spanNulls": true,
             "stacking": {
               "group": "A",
               "mode": "none"
             },
             "thresholdsStyle": {
-              "mode": "off"
+              "mode": "line"
             }
           },
           "mappings": [],
@@ -305,20 +474,24 @@
               {
                 "color": "green",
                 "value": null
+              },
+              {
+                "color": "red",
+                "value": 0.01
               }
             ]
           },
-          "unit": "Mbits"
+          "unit": "percent"
         },
         "overrides": []
       },
       "gridPos": {
-        "h": 9,
+        "h": 8,
         "w": 12,
         "x": 12,
         "y": 4
       },
-      "id": 4,
+      "id": 7,
       "options": {
         "legend": {
           "calcs": [
@@ -341,21 +514,12 @@
             "type": "prometheus",
             "uid": "prometheus"
           },
-          "expr": "rate(upf_urllc_rx_bytes_total{job=\"upf-urllc\"}[30s]) * 8 / 1000000",
-          "legendFormat": "uRLLC RX",
+          "expr": "slice_loss_percent{slice=\"urllc\"}",
+          "legendFormat": "{{profile}}",
           "refId": "A"
-        },
-        {
-          "datasource": {
-            "type": "prometheus",
-            "uid": "prometheus"
-          },
-          "expr": "rate(upf_urllc_tx_bytes_total{job=\"upf-urllc\"}[30s]) * 8 / 1000000",
-          "legendFormat": "uRLLC TX",
-          "refId": "B"
         }
       ],
-      "title": "uRLLC Throughput",
+      "title": "URLLC Packet Loss %",
       "type": "timeseries"
     },
     {
@@ -376,7 +540,7 @@
             "axisPlacement": "auto",
             "barAlignment": 0,
             "drawStyle": "line",
-            "fillOpacity": 12,
+            "fillOpacity": 18,
             "gradientMode": "opacity",
             "hideFrom": {
               "legend": false,
@@ -384,13 +548,13 @@
               "viz": false
             },
             "insertNulls": false,
-            "lineInterpolation": "smooth",
+            "lineInterpolation": "linear",
             "lineWidth": 2,
             "pointSize": 5,
             "scaleDistribution": {
               "type": "linear"
             },
-            "showPoints": "never",
+            "showPoints": "auto",
             "spanNulls": true,
             "stacking": {
               "group": "A",
@@ -416,12 +580,12 @@
         "overrides": []
       },
       "gridPos": {
-        "h": 9,
-        "w": 24,
+        "h": 8,
+        "w": 12,
         "x": 0,
-        "y": 13
+        "y": 12
       },
-      "id": 5,
+      "id": 8,
       "options": {
         "legend": {
           "calcs": [
@@ -444,42 +608,128 @@
             "type": "prometheus",
             "uid": "prometheus"
           },
-          "expr": "rate(upf_embb_rx_bytes_total{job=\"upf-embb\"}[30s]) * 8 / 1000000",
-          "legendFormat": "eMBB RX",
+          "expr": "slice_throughput_mbps{slice=\"embb\"}",
+          "legendFormat": "{{profile}}",
           "refId": "A"
+        }
+      ],
+      "title": "eMBB Throughput Mbps",
+      "type": "timeseries"
+    },
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "palette-classic"
+          },
+          "custom": {
+            "axisBorderShow": false,
+            "axisCenteredZero": false,
+            "axisColorMode": "text",
+            "axisLabel": "Mbps",
+            "axisPlacement": "auto",
+            "barAlignment": 0,
+            "drawStyle": "line",
+            "fillOpacity": 18,
+            "gradientMode": "opacity",
+            "hideFrom": {
+              "legend": false,
+              "tooltip": false,
+              "viz": false
+            },
+            "insertNulls": false,
+            "lineInterpolation": "linear",
+            "lineWidth": 2,
+            "pointSize": 5,
+            "scaleDistribution": {
+              "type": "linear"
+            },
+            "showPoints": "auto",
+            "spanNulls": true,
+            "stacking": {
+              "group": "A",
+              "mode": "none"
+            },
+            "thresholdsStyle": {
+              "mode": "off"
+            }
+          },
+          "mappings": [],
+          "min": 0,
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              }
+            ]
+          },
+          "unit": "Mbits"
         },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 12,
+        "y": 12
+      },
+      "id": 9,
+      "options": {
+        "legend": {
+          "calcs": [
+            "lastNotNull",
+            "max",
+            "mean"
+          ],
+          "displayMode": "table",
+          "placement": "bottom",
+          "showLegend": true
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      },
+      "targets": [
         {
           "datasource": {
             "type": "prometheus",
             "uid": "prometheus"
           },
-          "expr": "rate(upf_urllc_rx_bytes_total{job=\"upf-urllc\"}[30s]) * 8 / 1000000",
-          "legendFormat": "uRLLC RX",
-          "refId": "B"
+          "expr": "slice_allocated_mbps",
+          "legendFormat": "{{slice}} {{profile}}",
+          "refId": "A"
         }
       ],
-      "title": "Slice Comparison",
+      "title": "Allocated Bandwidth History",
       "type": "timeseries"
     }
   ],
-  "refresh": "15s",
+  "refresh": "10s",
   "schemaVersion": 39,
   "tags": [
     "5g",
     "network-slicing",
+    "closed-loop",
     "open5gs"
   ],
   "templating": {
     "list": []
   },
   "time": {
-    "from": "now-15m",
+    "from": "now-30m",
     "to": "now"
   },
   "timepicker": {},
   "timezone": "browser",
-  "title": "5G Network Slicing",
+  "title": "5G Network Slicing Resource Optimization",
   "uid": "5g-network-slicing",
-  "version": 1,
+  "version": 2,
   "weekStart": ""
 }

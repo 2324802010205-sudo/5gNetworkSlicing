@@ -3,3 +3,5 @@ prometheus_data/
 mongodb_data/
 reports/
 *.pcap
+__pycache__/
+*.pyc
