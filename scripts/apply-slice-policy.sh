@@ -4,6 +4,45 @@ set -euo pipefail
 # tc/htb/netem/fq_codel is used only as a testbed proxy for resource pressure
 # and policy enforcement, not as standard 5G QoS.
 
+cd "$(dirname "${BASH_SOURCE[0]}")/.."
+
+CAPACITY_FILE="reports/capacity.env"
+CAPACITY_SOURCE="fallback defaults"
+DYNAMIC_NORMAL_EMBB_MBPS=12
+DYNAMIC_NORMAL_URLLC_MBPS=3
+DYNAMIC_PRIORITY_EMBB_MBPS=10
+DYNAMIC_PRIORITY_URLLC_MBPS=5
+
+is_positive_number() {
+    awk -v value="$1" 'BEGIN {exit !(value ~ /^[0-9]+([.][0-9]+)?$/ && value > 0)}'
+}
+
+load_capacity() {
+    if [ ! -f "$CAPACITY_FILE" ]; then
+        return
+    fi
+
+    unset DYNAMIC_NORMAL_EMBB_MBPS DYNAMIC_NORMAL_URLLC_MBPS
+    unset DYNAMIC_PRIORITY_EMBB_MBPS DYNAMIC_PRIORITY_URLLC_MBPS
+    # shellcheck disable=SC1090
+    source "$CAPACITY_FILE"
+    if is_positive_number "${DYNAMIC_NORMAL_EMBB_MBPS:-}" &&
+        is_positive_number "${DYNAMIC_NORMAL_URLLC_MBPS:-}" &&
+        is_positive_number "${DYNAMIC_PRIORITY_EMBB_MBPS:-}" &&
+        is_positive_number "${DYNAMIC_PRIORITY_URLLC_MBPS:-}"; then
+        CAPACITY_SOURCE="$CAPACITY_FILE"
+    else
+        echo "WARNING: Invalid values in $CAPACITY_FILE; using fallback defaults." >&2
+        DYNAMIC_NORMAL_EMBB_MBPS=12
+        DYNAMIC_NORMAL_URLLC_MBPS=3
+        DYNAMIC_PRIORITY_EMBB_MBPS=10
+        DYNAMIC_PRIORITY_URLLC_MBPS=5
+    fi
+}
+
+load_capacity
+echo "Capacity source: $CAPACITY_SOURCE"
+
 usage() {
     cat <<'EOF'
 Usage:
@@ -108,19 +147,19 @@ case "$PROFILE" in
         echo "Applied profile=no-policy"
         ;;
     static|dynamic-normal)
-        apply_htb_fq_codel upf-embb 12Mbit
-        apply_htb_fq_codel upf-urllc 3Mbit
-        echo "Applied profile=$PROFILE embb=12Mbit urllc=3Mbit"
+        apply_htb_fq_codel upf-embb "${DYNAMIC_NORMAL_EMBB_MBPS}Mbit"
+        apply_htb_fq_codel upf-urllc "${DYNAMIC_NORMAL_URLLC_MBPS}Mbit"
+        echo "Applied profile=$PROFILE embb=${DYNAMIC_NORMAL_EMBB_MBPS}Mbit urllc=${DYNAMIC_NORMAL_URLLC_MBPS}Mbit"
         ;;
     dynamic-urllc-priority)
-        apply_htb_fq_codel upf-embb 10Mbit
-        apply_htb_fq_codel upf-urllc 5Mbit
-        echo "Applied profile=dynamic-urllc-priority embb=10Mbit urllc=5Mbit"
+        apply_htb_fq_codel upf-embb "${DYNAMIC_PRIORITY_EMBB_MBPS}Mbit"
+        apply_htb_fq_codel upf-urllc "${DYNAMIC_PRIORITY_URLLC_MBPS}Mbit"
+        echo "Applied profile=dynamic-urllc-priority embb=${DYNAMIC_PRIORITY_EMBB_MBPS}Mbit urllc=${DYNAMIC_PRIORITY_URLLC_MBPS}Mbit"
         ;;
     fault-urllc-congestion)
-        apply_htb_netem_fq_codel upf-embb 12Mbit "delay 6ms 1ms"
+        apply_htb_netem_fq_codel upf-embb "${DYNAMIC_NORMAL_EMBB_MBPS}Mbit" "delay 6ms 1ms"
         apply_htb_netem_fq_codel upf-urllc 1Mbit "delay 50ms 5ms loss 1%"
-        echo "Applied profile=fault-urllc-congestion embb=12Mbit urllc=1Mbit with URLLC delay/loss fault"
+        echo "Applied profile=fault-urllc-congestion embb=${DYNAMIC_NORMAL_EMBB_MBPS}Mbit urllc=1Mbit with URLLC delay/loss fault"
         ;;
     *)
         echo "Unsupported profile: $PROFILE" >&2

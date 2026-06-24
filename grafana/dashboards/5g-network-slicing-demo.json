@@ -48,7 +48,7 @@
       },
       "gridPos": {
         "h": 4,
-        "w": 6,
+        "w": 5,
         "x": 0,
         "y": 0
       },
@@ -75,7 +75,7 @@
             "type": "prometheus",
             "uid": "prometheus"
           },
-          "expr": "topk(1, slice_policy_active == 1)",
+          "expr": "slice_policy_active == 1",
           "instant": true,
           "legendFormat": "{{profile}}",
           "range": false,
@@ -113,7 +113,7 @@
       "gridPos": {
         "h": 4,
         "w": 4,
-        "x": 6,
+        "x": 5,
         "y": 0
       },
       "id": 2,
@@ -139,9 +139,9 @@
             "type": "prometheus",
             "uid": "prometheus"
           },
-          "expr": "slice_allocated_mbps{slice=\"embb\"}",
+          "expr": "current_embb_allocated_mbps",
           "instant": true,
-          "legendFormat": "{{profile}}",
+          "legendFormat": "eMBB allocated",
           "range": false,
           "refId": "A"
         }
@@ -177,7 +177,7 @@
       "gridPos": {
         "h": 4,
         "w": 4,
-        "x": 10,
+        "x": 9,
         "y": 0
       },
       "id": 3,
@@ -203,9 +203,9 @@
             "type": "prometheus",
             "uid": "prometheus"
           },
-          "expr": "slice_allocated_mbps{slice=\"urllc\"}",
+          "expr": "current_urllc_allocated_mbps",
           "instant": true,
-          "legendFormat": "{{profile}}",
+          "legendFormat": "URLLC allocated",
           "range": false,
           "refId": "A"
         }
@@ -223,7 +223,23 @@
           "color": {
             "mode": "thresholds"
           },
-          "mappings": [],
+          "mappings": [
+            {
+              "options": {
+                "0": {
+                  "color": "green",
+                  "index": 0,
+                  "text": "OK"
+                },
+                "1": {
+                  "color": "red",
+                  "index": 1,
+                  "text": "VIOLATION"
+                }
+              },
+              "type": "value"
+            }
+          ],
           "thresholds": {
             "mode": "absolute",
             "steps": [
@@ -239,41 +255,12 @@
           },
           "unit": "short"
         },
-        "overrides": [
-          {
-            "matcher": {
-              "id": "byName",
-              "options": "Value"
-            },
-            "properties": [
-              {
-                "id": "mappings",
-                "value": [
-                  {
-                    "options": {
-                      "0": {
-                        "color": "green",
-                        "index": 0,
-                        "text": "OK"
-                      },
-                      "1": {
-                        "color": "red",
-                        "index": 1,
-                        "text": "VIOLATION"
-                      }
-                    },
-                    "type": "value"
-                  }
-                ]
-              }
-            ]
-          }
-        ]
+        "overrides": []
       },
       "gridPos": {
         "h": 4,
         "w": 4,
-        "x": 14,
+        "x": 13,
         "y": 0
       },
       "id": 4,
@@ -299,9 +286,9 @@
             "type": "prometheus",
             "uid": "prometheus"
           },
-          "expr": "slice_sla_violation{slice=\"urllc\"}",
+          "expr": "current_sla_violation",
           "instant": true,
-          "legendFormat": "{{profile}}",
+          "legendFormat": "SLA status",
           "range": false,
           "refId": "A"
         }
@@ -316,8 +303,8 @@
       },
       "gridPos": {
         "h": 4,
-        "w": 6,
-        "x": 18,
+        "w": 7,
+        "x": 17,
         "y": 0
       },
       "id": 5,
@@ -352,7 +339,7 @@
             "axisPlacement": "auto",
             "barAlignment": 0,
             "drawStyle": "line",
-            "fillOpacity": 18,
+            "fillOpacity": 12,
             "gradientMode": "opacity",
             "hideFrom": {
               "legend": false,
@@ -424,110 +411,21 @@
             "type": "prometheus",
             "uid": "prometheus"
           },
-          "expr": "slice_latency_ms{slice=\"urllc\"}",
-          "legendFormat": "{{profile}}",
+          "expr": "current_urllc_latency_ms",
+          "legendFormat": "URLLC RTT latency",
           "refId": "A"
-        }
-      ],
-      "title": "URLLC Latency ms",
-      "type": "timeseries"
-    },
-    {
-      "datasource": {
-        "type": "prometheus",
-        "uid": "prometheus"
-      },
-      "fieldConfig": {
-        "defaults": {
-          "color": {
-            "mode": "palette-classic"
-          },
-          "custom": {
-            "axisBorderShow": false,
-            "axisCenteredZero": false,
-            "axisColorMode": "text",
-            "axisLabel": "%",
-            "axisPlacement": "auto",
-            "barAlignment": 0,
-            "drawStyle": "line",
-            "fillOpacity": 18,
-            "gradientMode": "opacity",
-            "hideFrom": {
-              "legend": false,
-              "tooltip": false,
-              "viz": false
-            },
-            "insertNulls": false,
-            "lineInterpolation": "linear",
-            "lineWidth": 2,
-            "pointSize": 5,
-            "scaleDistribution": {
-              "type": "linear"
-            },
-            "showPoints": "auto",
-            "spanNulls": true,
-            "stacking": {
-              "group": "A",
-              "mode": "none"
-            },
-            "thresholdsStyle": {
-              "mode": "line"
-            }
-          },
-          "mappings": [],
-          "min": 0,
-          "thresholds": {
-            "mode": "absolute",
-            "steps": [
-              {
-                "color": "green",
-                "value": null
-              },
-              {
-                "color": "red",
-                "value": 0.01
-              }
-            ]
-          },
-          "unit": "percent"
         },
-        "overrides": []
-      },
-      "gridPos": {
-        "h": 8,
-        "w": 12,
-        "x": 0,
-        "y": 12
-      },
-      "id": 7,
-      "options": {
-        "legend": {
-          "calcs": [
-            "lastNotNull",
-            "max",
-            "mean"
-          ],
-          "displayMode": "table",
-          "placement": "bottom",
-          "showLegend": true
-        },
-        "tooltip": {
-          "mode": "multi",
-          "sort": "desc"
-        }
-      },
-      "targets": [
         {
           "datasource": {
             "type": "prometheus",
             "uid": "prometheus"
           },
-          "expr": "slice_loss_percent{slice=\"urllc\"}",
-          "legendFormat": "{{profile}}",
-          "refId": "A"
+          "expr": "vector(15)",
+          "legendFormat": "SLA threshold",
+          "refId": "B"
         }
       ],
-      "title": "URLLC Packet Loss %",
+      "title": "URLLC Latency ms",
       "type": "timeseries"
     },
     {
@@ -548,7 +446,7 @@
             "axisPlacement": "auto",
             "barAlignment": 0,
             "drawStyle": "line",
-            "fillOpacity": 18,
+            "fillOpacity": 12,
             "gradientMode": "opacity",
             "hideFrom": {
               "legend": false,
@@ -593,6 +491,104 @@
         "x": 12,
         "y": 4
       },
+      "id": 7,
+      "options": {
+        "legend": {
+          "calcs": [
+            "lastNotNull",
+            "max",
+            "mean"
+          ],
+          "displayMode": "table",
+          "placement": "bottom",
+          "showLegend": true
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "expr": "current_embb_throughput_mbps",
+          "legendFormat": "eMBB throughput",
+          "refId": "A"
+        }
+      ],
+      "title": "eMBB Throughput Mbps",
+      "type": "timeseries"
+    },
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "palette-classic"
+          },
+          "custom": {
+            "axisBorderShow": false,
+            "axisCenteredZero": false,
+            "axisColorMode": "text",
+            "axisLabel": "%",
+            "axisPlacement": "auto",
+            "barAlignment": 0,
+            "drawStyle": "line",
+            "fillOpacity": 12,
+            "gradientMode": "opacity",
+            "hideFrom": {
+              "legend": false,
+              "tooltip": false,
+              "viz": false
+            },
+            "insertNulls": false,
+            "lineInterpolation": "linear",
+            "lineWidth": 2,
+            "pointSize": 5,
+            "scaleDistribution": {
+              "type": "linear"
+            },
+            "showPoints": "auto",
+            "spanNulls": true,
+            "stacking": {
+              "group": "A",
+              "mode": "none"
+            },
+            "thresholdsStyle": {
+              "mode": "line"
+            }
+          },
+          "mappings": [],
+          "min": 0,
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "red",
+                "value": 0.01
+              }
+            ]
+          },
+          "unit": "percent"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 7,
+        "w": 12,
+        "x": 0,
+        "y": 12
+      },
       "id": 8,
       "options": {
         "legend": {
@@ -616,12 +612,12 @@
             "type": "prometheus",
             "uid": "prometheus"
           },
-          "expr": "slice_throughput_mbps{slice=\"embb\"}",
-          "legendFormat": "{{profile}}",
+          "expr": "current_urllc_loss_percent",
+          "legendFormat": "URLLC packet loss",
           "refId": "A"
         }
       ],
-      "title": "eMBB Throughput Mbps",
+      "title": "URLLC Packet Loss %",
       "type": "timeseries"
     },
     {
@@ -642,7 +638,7 @@
             "axisPlacement": "auto",
             "barAlignment": 0,
             "drawStyle": "line",
-            "fillOpacity": 18,
+            "fillOpacity": 12,
             "gradientMode": "opacity",
             "hideFrom": {
               "legend": false,
@@ -682,7 +678,7 @@
         "overrides": []
       },
       "gridPos": {
-        "h": 8,
+        "h": 7,
         "w": 12,
         "x": 12,
         "y": 12
@@ -710,34 +706,43 @@
             "type": "prometheus",
             "uid": "prometheus"
           },
-          "expr": "slice_allocated_mbps",
-          "legendFormat": "{{slice}} {{profile}}",
+          "expr": "current_embb_allocated_mbps",
+          "legendFormat": "eMBB allocated",
           "refId": "A"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "expr": "current_urllc_allocated_mbps",
+          "legendFormat": "URLLC allocated",
+          "refId": "B"
         }
       ],
       "title": "Allocated Bandwidth History",
       "type": "timeseries"
     }
   ],
-  "refresh": "10s",
+  "refresh": "5s",
   "schemaVersion": 39,
   "tags": [
     "5g",
     "network-slicing",
     "closed-loop",
-    "open5gs"
+    "demo"
   ],
   "templating": {
     "list": []
   },
   "time": {
-    "from": "now-30m",
+    "from": "now-15m",
     "to": "now"
   },
   "timepicker": {},
   "timezone": "browser",
-  "title": "5G Network Slicing Resource Optimization",
-  "uid": "5g-network-slicing",
-  "version": 4,
+  "title": "5G Network Slicing Resource Optimization - Demo",
+  "uid": "5g-network-slicing-demo",
+  "version": 1,
   "weekStart": ""
 }

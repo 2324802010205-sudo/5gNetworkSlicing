@@ -14,6 +14,11 @@ MEASURE_SCRIPT = REPO_ROOT / "scripts" / "measure-urllc-sla.sh"
 APPLY_POLICY_SCRIPT = REPO_ROOT / "scripts" / "apply-slice-policy.sh"
 PUSH_METRICS_SCRIPT = REPO_ROOT / "scripts" / "push-slice-metrics.sh"
 STATE_FILE = REPO_ROOT / "reports" / "controller-state.json"
+CAPACITY_FILE = REPO_ROOT / "reports" / "capacity.env"
+FALLBACK_ALLOCATIONS = {
+    "dynamic-normal": (12, 3),
+    "dynamic-urllc-priority": (10, 5),
+}
 
 
 def run_command(cmd, check=True):
@@ -51,6 +56,40 @@ def parse_float(value, default=math.nan):
         return float(value)
     except (TypeError, ValueError):
         return default
+
+
+def load_allocations():
+    allocations = FALLBACK_ALLOCATIONS.copy()
+    if not CAPACITY_FILE.exists():
+        return allocations
+
+    values = {}
+    try:
+        for raw_line in CAPACITY_FILE.read_text(encoding="utf-8").splitlines():
+            line = raw_line.strip()
+            if not line or line.startswith("#") or "=" not in line:
+                continue
+            key, value = line.split("=", 1)
+            values[key.strip()] = value.strip()
+
+        normal = (
+            float(values["DYNAMIC_NORMAL_EMBB_MBPS"]),
+            float(values["DYNAMIC_NORMAL_URLLC_MBPS"]),
+        )
+        priority = (
+            float(values["DYNAMIC_PRIORITY_EMBB_MBPS"]),
+            float(values["DYNAMIC_PRIORITY_URLLC_MBPS"]),
+        )
+        if min(*normal, *priority) <= 0:
+            raise ValueError("capacity values must be positive")
+    except (OSError, KeyError, ValueError):
+        print(f"WARNING: invalid {CAPACITY_FILE.relative_to(REPO_ROOT)}; using fallback allocations", file=sys.stderr)
+        return allocations
+
+    return {
+        "dynamic-normal": normal,
+        "dynamic-urllc-priority": priority,
+    }
 
 
 def load_state():
@@ -117,9 +156,7 @@ def is_healthy_for_release(metrics, latency_threshold_ms):
 
 
 def allocation_for(profile):
-    if profile == "dynamic-urllc-priority":
-        return 10, 5
-    return 12, 3
+    return load_allocations().get(profile, FALLBACK_ALLOCATIONS["dynamic-normal"])
 
 
 def decide_policy(metrics, args, state):

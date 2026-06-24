@@ -23,7 +23,7 @@ bash scripts/demo-sla-violation.sh
 Open Grafana:
 
 ```text
-http://localhost:3000/d/5g-network-slicing/5g-network-slicing-resource-optimization
+http://localhost:3000/d/5g-network-slicing-demo/5g-network-slicing-resource-optimization-demo
 ```
 
 Default login is usually:
@@ -51,15 +51,15 @@ reports/closed-loop-summary.md
 
 ## Grafana Panels
 
-- Current Policy: active controller policy. Only the profile with `slice_policy_active == 1` should appear.
-- eMBB Allocated Mbps: current eMBB resource budget.
-- URLLC Allocated Mbps: current URLLC resource budget.
-- URLLC SLA Status: `OK` or `VIOLATION`.
+- Current Policy: active controller policy from `slice_policy_active == 1`.
+- eMBB Allocated Mbps: current eMBB resource budget from `current_embb_allocated_mbps`.
+- URLLC Allocated Mbps: current URLLC resource budget from `current_urllc_allocated_mbps`.
+- URLLC SLA Status: `OK` or `VIOLATION` from `current_sla_violation`.
 - Testbed Note: reminds reviewers that tc/htb/netem/fq_codel is only a testbed proxy.
-- URLLC Latency ms: RTT latency measured through `uesimtun0`.
-- eMBB Throughput Mbps: throughput parsed from `scripts/test-embb.sh`.
-- URLLC Packet Loss %: packet loss parsed from ping output.
-- Allocated Bandwidth History: resource budget changes over time.
+- URLLC Latency ms: RTT latency measured through `uesimtun0`, plus the 15 ms SLA threshold line.
+- eMBB Throughput Mbps: throughput parsed from `scripts/test-embb.sh` and pushed as `current_embb_throughput_mbps`.
+- URLLC Packet Loss %: packet loss parsed from ping output as `current_urllc_loss_percent`.
+- Allocated Bandwidth History: current eMBB and URLLC resource budgets over time.
 
 Expected story:
 

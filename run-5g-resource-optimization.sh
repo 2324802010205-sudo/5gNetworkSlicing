@@ -4,8 +4,8 @@ set -euo pipefail
 DURATION="${DURATION:-60}"
 STABILITY_DURATION="${STABILITY_DURATION:-300}"
 SAMPLE_INTERVAL="${SAMPLE_INTERVAL:-10}"
-EMBB_PARALLEL="${EMBB_PARALLEL:-4}"
-URLLC_TARGET="${URLLC_TARGET:-10.46.0.1}"
+EMBB_PARALLEL=2
+URLLC_TARGET="${URLLC_TARGET:-}"
 PING_COUNT="${PING_COUNT:-50}"
 PING_INTERVAL="${PING_INTERVAL:-0.1}"
 IPERF_IMAGE="${IPERF_IMAGE:-networkstatic/iperf3:latest}"
@@ -21,6 +21,36 @@ REPORT_FILE="$REPORT_DIR/5g-resource-optimization-$RUN_ID.md"
 CSV_FILE="$REPORT_DIR/5g-resource-optimization-$RUN_ID.csv"
 STABILITY_CSV="$REPORT_DIR/5g-resource-optimization-stability-$RUN_ID.csv"
 IPERF_CLIENT_NAME="embb-resource-load-$RUN_ID"
+STRESS=false
+
+usage() {
+    cat <<'EOF'
+Usage:
+  bash run-5g-resource-optimization.sh
+  bash run-5g-resource-optimization.sh --stress
+
+Default eMBB parallelism is 2. --stress uses 4 parallel streams.
+EOF
+}
+
+while [ "$#" -gt 0 ]; do
+    case "$1" in
+        --stress)
+            STRESS=true
+            EMBB_PARALLEL=4
+            shift
+            ;;
+        -h|--help)
+            usage
+            exit 0
+            ;;
+        *)
+            echo "Unknown argument: $1" >&2
+            usage >&2
+            exit 2
+            ;;
+    esac
+done
 
 cleanup() {
     docker rm -f "$IPERF_CLIENT_NAME" >/dev/null 2>&1 || true
@@ -149,6 +179,15 @@ ensure_iperf_server
 for c in upf-embb upf-urllc ue-embb ue-urllc "$IPERF_SERVER"; do
     need_container "$c"
 done
+
+if [ -z "$URLLC_TARGET" ]; then
+    URLLC_TARGET=$(docker exec upf-urllc sh -c \
+        "ip -4 -o addr show dev ogstun | awk '{print \$4}' | cut -d/ -f1 | head -n1")
+fi
+if [ -z "$URLLC_TARGET" ]; then
+    echo "Could not discover the URLLC target from upf-urllc ogstun" >&2
+    exit 1
+fi
 
 echo "[1/6] Applying scaled resource profiles"
 bash ./fix-upf.sh >/dev/null 2>&1

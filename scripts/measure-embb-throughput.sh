@@ -6,6 +6,7 @@ PARALLEL="${PARALLEL:-2}"
 REPORT_DIR="${REPORT_DIR:-reports}"
 TIMESTAMP="${TIMESTAMP:-$(date +%Y%m%d-%H%M%S)}"
 LOG_FILE="${LOG_FILE:-$REPORT_DIR/embb-throughput-$TIMESTAMP.log}"
+TEST_LOG_FILE="${TEST_LOG_FILE:-$REPORT_DIR/embb-test-$TIMESTAMP.log}"
 
 parse_sum_receiver_mbps() {
     local file="$1"
@@ -54,7 +55,8 @@ fail_output() {
 mkdir -p "$REPORT_DIR"
 
 set +e
-DURATION="$DURATION" PARALLEL="$PARALLEL" bash scripts/test-embb.sh > "$LOG_FILE" 2>&1
+DURATION="$DURATION" PARALLEL="$PARALLEL" LOG_FILE="$TEST_LOG_FILE" \
+    bash scripts/test-embb.sh > "$LOG_FILE" 2>&1
 TEST_RC=$?
 set -e
 

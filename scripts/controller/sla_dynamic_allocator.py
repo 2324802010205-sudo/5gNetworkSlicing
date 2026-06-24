@@ -11,6 +11,15 @@ from pathlib import Path
 
 URLLC_LATENCY_SLA_MS = 20.0
 URLLC_LOSS_SLA_PERCENT = 0.1
+REPO_ROOT = Path(__file__).resolve().parents[2]
+CAPACITY_FILE = REPO_ROOT / "reports" / "capacity.env"
+FALLBACK_CAPACITY = {
+    "SAFE_TOTAL_MBPS": 15.0,
+    "DYNAMIC_NORMAL_EMBB_MBPS": 12.0,
+    "DYNAMIC_NORMAL_URLLC_MBPS": 3.0,
+    "DYNAMIC_PRIORITY_EMBB_MBPS": 10.0,
+    "DYNAMIC_PRIORITY_URLLC_MBPS": 5.0,
+}
 
 
 def run(cmd, check=True):
@@ -28,6 +37,38 @@ def require_container(name):
     state = run(["docker", "inspect", "-f", "{{.State.Status}}", name], check=False).strip()
     if state != "running":
         raise RuntimeError(f"container {name} is not running")
+
+
+def load_capacity():
+    capacity = FALLBACK_CAPACITY.copy()
+    if not CAPACITY_FILE.exists():
+        return capacity
+
+    try:
+        for raw_line in CAPACITY_FILE.read_text(encoding="utf-8").splitlines():
+            line = raw_line.strip()
+            if not line or line.startswith("#") or "=" not in line:
+                continue
+            key, value = line.split("=", 1)
+            if key in capacity:
+                capacity[key] = float(value)
+        if min(capacity.values()) <= 0:
+            raise ValueError("capacity values must be positive")
+    except (OSError, ValueError):
+        print(f"WARNING: invalid {CAPACITY_FILE}; using fallback capacity", file=sys.stderr)
+        return FALLBACK_CAPACITY.copy()
+    return capacity
+
+
+def discover_urllc_target():
+    output = docker_exec(
+        "upf-urllc",
+        "ip -4 -o addr show dev ogstun | awk '{print $4}' | cut -d/ -f1 | head -n1",
+    )
+    target = output.strip()
+    if not target:
+        raise RuntimeError("could not discover URLLC target from upf-urllc ogstun")
+    return target
 
 
 def ogstun_tx_bytes(container):
@@ -109,19 +150,35 @@ def main():
     )
     parser.add_argument("--duration", type=int, default=120)
     parser.add_argument("--interval", type=int, default=3)
-    parser.add_argument("--urllc-target", default="10.46.0.1")
+    parser.add_argument("--urllc-target", default="", help="Defaults to the discovered upf-urllc ogstun address")
     parser.add_argument("--ping-count", type=int, default=8)
-    parser.add_argument("--total-mbps", type=int, default=100)
-    parser.add_argument("--static-embb-mbps", type=int, default=70)
-    parser.add_argument("--static-urllc-mbps", type=int, default=30)
-    parser.add_argument("--min-urllc-mbps", type=int, default=10)
-    parser.add_argument("--max-urllc-mbps", type=int, default=80)
-    parser.add_argument("--step-mbps", type=int, default=10)
+    parser.add_argument("--total-mbps", type=int, default=None, help="Defaults to SAFE_TOTAL_MBPS from capacity.env")
+    parser.add_argument("--static-embb-mbps", type=int, default=None)
+    parser.add_argument("--static-urllc-mbps", type=int, default=None)
+    parser.add_argument("--min-urllc-mbps", type=int, default=None)
+    parser.add_argument("--max-urllc-mbps", type=int, default=None)
+    parser.add_argument("--step-mbps", type=int, default=None)
     parser.add_argument("--output", default="")
     args = parser.parse_args()
 
     for container in ["upf-embb", "upf-urllc", "ue-urllc"]:
         require_container(container)
+
+    capacity = load_capacity()
+    args.urllc_target = args.urllc_target or discover_urllc_target()
+    args.total_mbps = args.total_mbps or max(
+        2,
+        round(capacity["SAFE_TOTAL_MBPS"]),
+        round(capacity["DYNAMIC_NORMAL_EMBB_MBPS"] + capacity["DYNAMIC_NORMAL_URLLC_MBPS"]),
+    )
+    args.static_embb_mbps = args.static_embb_mbps or round(capacity["DYNAMIC_NORMAL_EMBB_MBPS"])
+    args.static_urllc_mbps = args.static_urllc_mbps or round(capacity["DYNAMIC_NORMAL_URLLC_MBPS"])
+    args.min_urllc_mbps = args.min_urllc_mbps or round(capacity["DYNAMIC_NORMAL_URLLC_MBPS"])
+    args.max_urllc_mbps = args.max_urllc_mbps or max(
+        args.min_urllc_mbps,
+        min(args.total_mbps - 1, round(capacity["DYNAMIC_PRIORITY_URLLC_MBPS"])),
+    )
+    args.step_mbps = args.step_mbps or max(1, round(args.total_mbps * 0.1))
 
     if args.output:
         csv_path = Path(args.output)
@@ -142,7 +199,10 @@ def main():
     embb_limit, urllc_limit = apply_mode(args.mode, embb_limit, urllc_limit)
     write_header(csv_path)
 
-    print(f"mode={args.mode} output={csv_path}")
+    print(
+        f"mode={args.mode} output={csv_path} urllc_target={args.urllc_target} "
+        f"total_mbps={args.total_mbps}"
+    )
     print("timestamp,mode,embb_mbps,urllc_latency_ms,urllc_loss_percent,urllc_bw_limit,embb_bw_limit")
 
     stable_cycles = 0

@@ -79,9 +79,31 @@ slice_sla_violation{slice="urllc",profile="$PROFILE"} $SLA_VIOLATION
 # TYPE slice_allocated_mbps gauge
 slice_allocated_mbps{slice="embb",profile="$PROFILE"} $EMBB_ALLOCATED_MBPS
 slice_allocated_mbps{slice="urllc",profile="$PROFILE"} $URLLC_ALLOCATED_MBPS
+# HELP current_urllc_latency_ms Current URLLC RTT latency in milliseconds.
+# TYPE current_urllc_latency_ms gauge
+current_urllc_latency_ms $URLLC_LATENCY_MS
+# HELP current_urllc_loss_percent Current URLLC packet loss percent.
+# TYPE current_urllc_loss_percent gauge
+current_urllc_loss_percent $URLLC_LOSS_PERCENT
+# HELP current_sla_violation Current URLLC SLA violation flag, 1 for violation and 0 for healthy.
+# TYPE current_sla_violation gauge
+current_sla_violation $SLA_VIOLATION
+# HELP current_embb_allocated_mbps Current eMBB allocated resource budget in Mbps.
+# TYPE current_embb_allocated_mbps gauge
+current_embb_allocated_mbps $EMBB_ALLOCATED_MBPS
+# HELP current_urllc_allocated_mbps Current URLLC allocated resource budget in Mbps.
+# TYPE current_urllc_allocated_mbps gauge
+current_urllc_allocated_mbps $URLLC_ALLOCATED_MBPS
 # HELP slice_policy_active Active policy profile flag.
 # TYPE slice_policy_active gauge
 EOF
+    if [ -n "$EMBB_MBPS" ]; then
+        cat <<EOF
+# HELP current_embb_throughput_mbps Current measured eMBB throughput in Mbps.
+# TYPE current_embb_throughput_mbps gauge
+current_embb_throughput_mbps $EMBB_MBPS
+EOF
+    fi
     for candidate in no-policy static dynamic-normal dynamic-urllc-priority fault-urllc-congestion; do
         if [ "$candidate" = "$PROFILE" ]; then
             echo "slice_policy_active{profile=\"$candidate\"} 1"

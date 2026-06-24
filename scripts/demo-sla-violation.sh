@@ -7,6 +7,12 @@ LATENCY_THRESHOLD_MS="${LATENCY_THRESHOLD_MS:-15}"
 PUSHGATEWAY_URL="${PUSHGATEWAY_URL:-http://localhost:9091}"
 RESULTS_CSV="${RESULTS_CSV:-reports/closed-loop-results.csv}"
 SUMMARY_MD="${SUMMARY_MD:-reports/closed-loop-summary.md}"
+CAPACITY_FILE="reports/capacity.env"
+CAPACITY_SOURCE="fallback defaults"
+DYNAMIC_NORMAL_EMBB_MBPS=12
+DYNAMIC_NORMAL_URLLC_MBPS=3
+DYNAMIC_PRIORITY_EMBB_MBPS=10
+DYNAMIC_PRIORITY_URLLC_MBPS=5
 
 LAST_EMBB_MBPS="NaN"
 LAST_EMBB_STATUS="FAIL"
@@ -24,6 +30,33 @@ LAST_CONTROLLER_POLICY="unknown"
 PRIORITY_EMBB="NaN"
 RECOVERY_URLLC_LATENCY="NaN"
 FINAL_POLICY="unknown"
+
+is_positive_number() {
+    awk -v value="$1" 'BEGIN {exit !(value ~ /^[0-9]+([.][0-9]+)?$/ && value > 0)}'
+}
+
+load_capacity() {
+    if [ ! -f "$CAPACITY_FILE" ]; then
+        return
+    fi
+
+    unset DYNAMIC_NORMAL_EMBB_MBPS DYNAMIC_NORMAL_URLLC_MBPS
+    unset DYNAMIC_PRIORITY_EMBB_MBPS DYNAMIC_PRIORITY_URLLC_MBPS
+    # shellcheck disable=SC1090
+    source "$CAPACITY_FILE"
+    if is_positive_number "${DYNAMIC_NORMAL_EMBB_MBPS:-}" &&
+        is_positive_number "${DYNAMIC_NORMAL_URLLC_MBPS:-}" &&
+        is_positive_number "${DYNAMIC_PRIORITY_EMBB_MBPS:-}" &&
+        is_positive_number "${DYNAMIC_PRIORITY_URLLC_MBPS:-}"; then
+        CAPACITY_SOURCE="$CAPACITY_FILE"
+    else
+        echo "WARNING: Invalid $CAPACITY_FILE; using fallback defaults." >&2
+        DYNAMIC_NORMAL_EMBB_MBPS=12
+        DYNAMIC_NORMAL_URLLC_MBPS=3
+        DYNAMIC_PRIORITY_EMBB_MBPS=10
+        DYNAMIC_PRIORITY_URLLC_MBPS=5
+    fi
+}
 
 extract_metric() {
     local key="$1"
@@ -183,10 +216,10 @@ run_controller() {
 profile_allocations() {
     local profile="$1"
     case "$profile" in
-        dynamic-urllc-priority) echo "10 5" ;;
+        dynamic-urllc-priority) echo "$DYNAMIC_PRIORITY_EMBB_MBPS $DYNAMIC_PRIORITY_URLLC_MBPS" ;;
         no-policy) echo "0 0" ;;
-        fault-urllc-congestion) echo "12 1" ;;
-        *) echo "12 3" ;;
+        fault-urllc-congestion) echo "$DYNAMIC_NORMAL_EMBB_MBPS 1" ;;
+        *) echo "$DYNAMIC_NORMAL_EMBB_MBPS $DYNAMIC_NORMAL_URLLC_MBPS" ;;
     esac
 }
 
@@ -220,12 +253,26 @@ This demonstrates closed-loop resource allocation for the testbed. It does not i
 
 tc/htb/netem/fq_codel is only a testbed proxy for resource pressure and policy enforcement, not standard 5G QoS.
 
+VM testbed uses limited RAM. Measured throughput is testbed-specific and should be recalibrated after changing vCPU/RAM.
+
 Detailed samples are in \`${RESULTS_CSV}\`.
 EOF
 }
 
-echo "Starting monitoring stack if local images are available"
-if ! docker compose --profile monitoring up -d --pull never prometheus pushgateway grafana; then
+load_capacity
+
+VM_VCPU=$(nproc)
+VM_RAM=$(free -h | awk '/^Mem:/ {print $2}')
+VM_SWAP=$(free -h | awk '/^Swap:/ {print $2}')
+echo "VM resources:"
+echo "vCPU=$VM_VCPU"
+echo "RAM=$VM_RAM"
+echo "Swap=$VM_SWAP"
+echo "Capacity source=$CAPACITY_SOURCE"
+echo
+
+echo "Starting monitoring stack for the demo"
+if ! docker compose --profile monitoring up -d prometheus pushgateway grafana; then
     echo "WARN: monitoring stack was not started. Start it manually if Pushgateway/Grafana are not already running."
 fi
 
@@ -264,8 +311,8 @@ measure_embb
 measure_urllc
 DYNAMIC_NORMAL_EMBB="$LAST_EMBB_MBPS"
 URLLC_BASELINE_LATENCY="$LAST_URLLC_LATENCY"
-push_snapshot dynamic-normal 12 3 "$LAST_EMBB_MBPS" "$LAST_URLLC_LATENCY" "$LAST_URLLC_LOSS" "$LAST_SLA_VIOLATION"
-append_result dynamic-normal dynamic-normal 12 3 "$LAST_EMBB_STATUS/$LAST_URLLC_STATUS"
+push_snapshot dynamic-normal "$DYNAMIC_NORMAL_EMBB_MBPS" "$DYNAMIC_NORMAL_URLLC_MBPS" "$LAST_EMBB_MBPS" "$LAST_URLLC_LATENCY" "$LAST_URLLC_LOSS" "$LAST_SLA_VIOLATION"
+append_result dynamic-normal dynamic-normal "$DYNAMIC_NORMAL_EMBB_MBPS" "$DYNAMIC_NORMAL_URLLC_MBPS" "$LAST_EMBB_STATUS/$LAST_URLLC_STATUS"
 
 echo
 echo "Phase 3: inject URLLC congestion fault"
@@ -273,8 +320,8 @@ bash scripts/apply-slice-policy.sh --profile fault-urllc-congestion
 LAST_EMBB_MBPS="NaN"
 measure_urllc
 FAULT_URLLC_LATENCY="$LAST_URLLC_LATENCY"
-push_snapshot fault-urllc-congestion 12 1 "" "$LAST_URLLC_LATENCY" "$LAST_URLLC_LOSS" "$LAST_SLA_VIOLATION"
-append_result fault-urllc-congestion fault-urllc-congestion 12 1 "$LAST_URLLC_STATUS"
+push_snapshot fault-urllc-congestion "$DYNAMIC_NORMAL_EMBB_MBPS" 1 "" "$LAST_URLLC_LATENCY" "$LAST_URLLC_LOSS" "$LAST_SLA_VIOLATION"
+append_result fault-urllc-congestion fault-urllc-congestion "$DYNAMIC_NORMAL_EMBB_MBPS" 1 "$LAST_URLLC_STATUS"
 
 echo
 echo "Phase 4: run controller once; expected policy is dynamic-urllc-priority"
@@ -286,8 +333,8 @@ measure_embb
 measure_urllc
 PRIORITY_EMBB="$LAST_EMBB_MBPS"
 RECOVERY_URLLC_LATENCY="$LAST_URLLC_LATENCY"
-push_snapshot dynamic-urllc-priority 10 5 "$LAST_EMBB_MBPS" "$LAST_URLLC_LATENCY" "$LAST_URLLC_LOSS" "$LAST_SLA_VIOLATION"
-append_result dynamic-urllc-priority dynamic-urllc-priority 10 5 "$LAST_EMBB_STATUS/$LAST_URLLC_STATUS"
+push_snapshot dynamic-urllc-priority "$DYNAMIC_PRIORITY_EMBB_MBPS" "$DYNAMIC_PRIORITY_URLLC_MBPS" "$LAST_EMBB_MBPS" "$LAST_URLLC_LATENCY" "$LAST_URLLC_LOSS" "$LAST_SLA_VIOLATION"
+append_result dynamic-urllc-priority dynamic-urllc-priority "$DYNAMIC_PRIORITY_EMBB_MBPS" "$DYNAMIC_PRIORITY_URLLC_MBPS" "$LAST_EMBB_STATUS/$LAST_URLLC_STATUS"
 
 echo
 echo "Phase 6: let controller run 3 more iterations so hysteresis can return to dynamic-normal"
@@ -326,6 +373,7 @@ docker exec upf-urllc tc class show dev ogstun
 EOF
 
 echo
-echo "Grafana: http://localhost:3000/d/5g-network-slicing/5g-network-slicing-resource-optimization"
+echo "Grafana demo: http://localhost:3000/d/5g-network-slicing-demo/5g-network-slicing-resource-optimization-demo"
+echo "Grafana debug: http://localhost:3000/d/5g-network-slicing/5g-network-slicing-resource-optimization"
 echo "Prometheus: http://localhost:9090"
 echo "Pushgateway: http://localhost:9091"
