@@ -17,9 +17,9 @@ services:
     container_name: mongo
     profiles: ["core"]
     restart: *restart_policy
-    mem_limit: 384m
+    mem_limit: 768m
     cpus: 0.40
-    command: ["mongod", "--bind_ip_all"]
+    command: ["mongod", "--bind_ip_all", "--wiredTigerCacheSizeGB", "0.30"]
     networks:
       br-5gcore:
         ipv4_address: 172.20.0.5
@@ -35,7 +35,7 @@ services:
       resources:
         limits:
           cpus: '0.40'
-          memory: 384M
+          memory: 768M
 
   nrf:
     image: *open5gs_image
